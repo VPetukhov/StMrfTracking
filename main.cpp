@@ -9,9 +9,6 @@
 #include "Tracking/Tracking.h"
 #include "Tracking/Utils.h"
 
-Mat label_map_gco(const BlockArray &blocks, const object_ids_t &object_id_map, const std::vector<Point> &motion_vectors,
-                  const Mat &prev_pixel_map, const Mat &frame, const Mat &old_frame);
-
 using namespace cv;
 using namespace Tracking;
 
