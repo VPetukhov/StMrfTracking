@@ -1,5 +1,6 @@
 #include <numeric>
 #include "BlockArray.h"
+#include "Utils.h"
 
 namespace Tracking
 {
@@ -83,13 +84,7 @@ namespace Tracking
 		cv::Mat res(this->height * this->block_height, this->width * this->block_width, BlockArray::cv_id_t);
 		for (auto const &block : this->_blocks)
 		{
-			for (int row = block.start_y; row < block.end_y; ++row)
-			{
-				for (int col = block.start_x; col < block.end_x; ++col)
-				{
-					res.at<id_t>(row, col) = block.object_id;
-				}
-			}
+			res(block.y_coords(), block.x_coords()) = block.object_id;
 		}
 
 		return res;
@@ -120,7 +115,7 @@ namespace Tracking
 
 	bool BlockArray::valid_coords(long row, long col) const
 	{
-		return (col >= 0) && (row >= 0) && (col < this->width) && (row < this->height);
+		return Tracking::valid_coords(row, col, this->height, this->width);
 	}
 
 	BlockArray::Slit::Slit(size_t slit_y, size_t slit_x_start, size_t slit_x_end, size_t block_width,

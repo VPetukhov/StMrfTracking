@@ -36,23 +36,6 @@ void draw_slit(Mat& img, const BlockArray &blocks, const BlockArray::Slit &slit)
 	line(img, Point(block_start.start_x, block_start.end_y), Point(block_end.end_x, block_start.end_y), CV_RGB(1, 0, 0));
 }
 
-Mat heatmap(const cv::Mat &labels)
-{
-	Mat res = Mat::zeros(labels.rows, labels.cols, CV_8UC3);
-	for (size_t row = 0; row < res.rows; ++row)
-	{
-		for (size_t col = 0; col < res.cols; ++col)
-		{
-			if (labels.at<int>(row, col) == 0)
-				continue;
-
-			srand(labels.at<int>(row, col));
-			res.at<Vec3b>(row, col, 0) = Vec3b(rand() % 255, rand() % 255, rand() % 255);
-		}
-	}
-	return res;
-}
-
 std::vector<Rect> bounding_boxes(const Mat &labels)
 {
 	std::map<int, Rect> bounding_boxes;
@@ -64,12 +47,17 @@ std::vector<Rect> bounding_boxes(const Mat &labels)
 			if (cur_lab == 0)
 				continue;
 
-			auto bb_it = bounding_boxes.emplace(std::make_pair(cur_lab, Rect(labels.cols, labels.rows, 0, 0))).first;
+			auto bb_it = bounding_boxes.find(cur_lab);
+			if (bb_it == bounding_boxes.end())
+			{
+				bb_it = bounding_boxes.emplace(cur_lab, Rect(labels.cols, labels.rows, 0, 0)).first;
+			}
 
-			bb_it->second.y = std::min(bb_it->second.y, row);
-			bb_it->second.x = std::min(bb_it->second.x, col);
-			bb_it->second.height = std::max(bb_it->second.height, row - bb_it->second.y + 1);
-			bb_it->second.width = std::max(bb_it->second.width, col - bb_it->second.x + 1);
+			auto const &bb = bb_it->second;
+			bb_it->second.y = std::min(bb.y, row);
+			bb_it->second.x = std::min(bb.x, col);
+			bb_it->second.height = std::max(bb.height, row - bb.y + 1);
+			bb_it->second.width = std::max(bb.width, col - bb.x + 1);
 		}
 	}
 
@@ -117,8 +105,10 @@ int main()
 
 	namedWindow("edges", 1);
 	// Loop
+	int i = 0;
 	while (true)
 	{
+		i++;
 		auto const prev_pixel_map = blocks.pixel_object_map();
 		update_slit_objects(blocks, slit, frame, background, new_object_id, foreground_threshold);
 
@@ -148,10 +138,7 @@ int main()
 			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords, foreground);
 
 			reset_map_before_slit(possible_object_ids, block_height, slit_y, vehicle_direction, blocks);
-			labels = label_map_naive(possible_object_ids);
-//		labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
-
-			// TODO: labeling
+			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
 		}
 
 		double max_lab;
@@ -159,23 +146,8 @@ int main()
 		new_object_id = static_cast<BlockArray::id_t>(max_lab) + 1;
 		blocks.set_object_ids(labels);
 
-//		Mat block_for = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
-//		for (size_t row = 0; row < blocks.height; ++row)
-//		{
-//			for (size_t col = 0; col < blocks.width; ++col)
-//			{
-//				block_for.at<BlockArray::id_t>(row, col) = is_foreground(blocks.at(row, col), foreground);
-//			}
-//		}
-
-//		imshow("edges", block_for > 0);
-//		std::cout << block_for << std::endl;
-
 		auto plot_map = blocks.pixel_object_map();
 		Mat plot_img = frame.clone();
-
-//		imshow("edges", block_for > 0);
-//		imshow("edges", blocks.object_map() > 0);
 
 		for (auto const &bb : bounding_boxes(plot_map))
 		{
@@ -184,11 +156,9 @@ int main()
 		draw_slit(plot_img, blocks, slit);
 
 		imshow("edges", plot_img);
-//		imshow("edges", plot_map > 0);
-//		imshow("edges", foreground);
-//		imshow("edges", frame - background);
 		if(waitKey(30) >= 0)
 			break;
+
 		std::cout << ".";
 	}
 
