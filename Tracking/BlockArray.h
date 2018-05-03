@@ -51,6 +51,8 @@ namespace Tracking
 		std::vector<Block> _blocks;
 
 	public:
+		static const int cv_id_t = cv::DataType<id_t>::type;
+
 		const size_t block_height;
 		const size_t block_width;
 
@@ -66,6 +68,8 @@ namespace Tracking
 		const Block& at(size_t row, size_t col) const;
 		const Block& at(cv::Point coords) const;
 		size_t index(size_t row, size_t col) const;
+		bool valid_coords(const cv::Point& coords) const;
+		bool valid_coords(long row, long col) const;
 
 		cv::Mat pixel_object_map() const;
 		cv::Mat object_map() const;

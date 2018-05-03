@@ -32,6 +32,7 @@ namespace Tracking
 	void reset_map_before_slit(object_ids_t &new_map, size_t slit_height, size_t slit_y,
 	                           const std::string &vehicle_direction, const BlockArray &blocks);
 
+	cv::Mat label_map_naive(const object_ids_t &object_id_map);
 	cv::Mat label_map_gco(const BlockArray &blocks, const object_ids_t &object_id_map,
 	                      const std::vector<cv::Point> &motion_vectors, const cv::Mat &prev_pixel_map,
 	                      const cv::Mat &frame, const cv::Mat &old_frame);

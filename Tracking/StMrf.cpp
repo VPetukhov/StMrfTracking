@@ -32,7 +32,7 @@ namespace Tracking
 			for (int di = 0; di < nds; ++di)
 			{
 				int new_x = block_x + d_xs[di], new_y = slit.block_y() + d_ys[di];
-				if (new_x < 0 || new_y < 0 || new_x >= blocks.width || new_y >= blocks.height)
+				if (!blocks.valid_coords(new_y, new_x))
 					continue;
 
 				next_id = block.object_id;
@@ -72,14 +72,14 @@ namespace Tracking
 
 	bool is_foreground(const BlockArray::Block &block, const Mat &foreground)
 	{
-		return average(cv::mean(foreground(block.y_coords(), block.x_coords()))) > 0.5;
+		return (cv::mean(foreground(block.y_coords(), block.x_coords())).val[0] / 255.0) > 0.5;
 	}
 
 	std::vector<coordinates_t> find_group_coordinates(const cv::Mat &labels)
 	{
 		using id_t = BlockArray::id_t;
-		double min_val, max_val;
-		cv::minMaxLoc(labels, &min_val, &max_val);
+		double max_val;
+		cv::minMaxLoc(labels, nullptr, &max_val);
 
 		std::vector<coordinates_t> group_coordinates(static_cast<size_t>(max_val) + 1);
 		for (size_t row = 0; row < labels.rows; ++row)
@@ -107,19 +107,21 @@ namespace Tracking
 			add(similarity_map, cur_map, similarity_map, noArray(), DataType<double>::type);
 		}
 
-		Point max_pos;
-		minMaxLoc(similarity_map, nullptr, nullptr, nullptr, &max_pos);
-		return max_pos;
+		Point min_pos;
+		minMaxLoc(similarity_map, nullptr, nullptr, &min_pos, nullptr);
+		min_pos.y -= blocks.block_height * search_rad;
+		min_pos.x -= blocks.block_width * search_rad;
+
+		return min_pos;
 	}
 
 	Mat motion_vector_similarity_map(const BlockArray &blocks, const Mat &frame, const Mat &old_frame,
 	                                 const Point &coords, int search_rad)
 	{
 		Mat similarity_map = Mat::zeros(blocks.block_height * search_rad * 2 + 1, blocks.block_width * search_rad * 2 + 1, DataType<double>::type);
-		if ((coords.x - search_rad) < 0 || (coords.y - search_rad) < 0 || (coords.x + search_rad) >= blocks.block_width || // TODO: replace with zero padding
-				(coords.y + search_rad) >= blocks.block_height)
+		if (!blocks.valid_coords(coords.y - search_rad, coords.x - search_rad) ||
+			!blocks.valid_coords(coords.y + search_rad, coords.x + search_rad))  // TODO: replace with zero padding
 			return similarity_map;
-
 
 		auto const &top_left = blocks.at(coords.y - search_rad, coords.x - search_rad);
 		auto const &bottom_right = blocks.at(coords.y + search_rad, coords.x + search_rad);
@@ -165,16 +167,22 @@ namespace Tracking
 			for (auto const &coords : gc)
 			{
 				auto new_coords = coords + m_vec;
+				if (!blocks.valid_coords(new_coords))
+					continue;
+
 				if (!is_foreground(blocks.at(new_coords), foreground))
 					continue;
 
 				auto cur_block_id = block_id_map.at<BlockArray::id_t>(coords);
+				if (cur_block_id == 0)
+					throw std::runtime_error("Zero block id for a group");
+
 				res_ids.at(new_coords.y).at(new_coords.x).insert(cur_block_id);
 
 				for (int di = 0; di < nds; ++di)
 				{
 					Point cur_coords = new_coords + Point(d_xs[di], d_ys[di]);
-					if (cur_coords.x < 0 || cur_coords.y < 0 || cur_coords.x >= blocks.width || cur_coords.y >= blocks.height)
+					if (!blocks.valid_coords(cur_coords))
 						continue;
 
 					auto &cur_cell = res_ids.at(cur_coords.y).at(cur_coords.x);
@@ -199,27 +207,50 @@ namespace Tracking
 		{
 			for (size_t row = 0; row < blocks.height; ++row)
 			{
-				if (blocks.at(row, 0).end_y > slit_y + slit_height)
-					break;
+				if (blocks.at(row, 0).end_y <= slit_y + slit_height)
+					continue;
 
 				for (size_t col = 0; col < blocks.width; ++col)
 				{
 					new_map.at(row).at(col).clear();
 				}
 			}
+
 			return;
 		}
 
+		if (vehicle_direction != "down")
+			throw std::runtime_error("Wrong vehicle direction: " + vehicle_direction);
+
 		for (size_t row = 0; row < blocks.height; ++row)
 		{
-			if (blocks.at(row, 0).end_y < slit_y)
-				continue;
+			if (blocks.at(row, 0).end_y > slit_y)
+				break;
 
 			for (size_t col = 0; col < blocks.width; ++col)
 			{
 				new_map.at(row).at(col).clear();
 			}
 		}
+	}
+
+	Mat label_map_naive(const object_ids_t &object_id_map)
+	{
+		size_t n_cols = object_id_map.at(0).size();
+		Mat res = Mat::zeros(object_id_map.size(), n_cols, BlockArray::cv_id_t);
+		for (size_t row = 0; row < object_id_map.size(); ++row)
+		{
+			for (size_t col = 0; col < n_cols; ++col)
+			{
+				auto const &cur_ids = object_id_map.at(row).at(col);
+				if (cur_ids.empty())
+					continue;
+
+				res.at<BlockArray::id_t>(row, col) = *cur_ids.begin();
+			}
+		}
+
+		return res;
 	}
 
 	Mat label_map_gco(const BlockArray &blocks, const object_ids_t &object_id_map, const std::vector<Point> &motion_vectors,

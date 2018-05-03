@@ -66,7 +66,7 @@ namespace Tracking
 		if (object_ids.rows != this->height || object_ids.cols != this->width)
 			throw std::logic_error("Wrong size of object ids: " + std::to_string(object_ids.rows) + "x" + std::to_string(object_ids.cols));
 
-		if (object_ids.type() != cv::DataType<id_t>::type)
+		if (object_ids.type() != BlockArray::cv_id_t)
 			throw std::logic_error("Wrong type of object ids: " + std::to_string(object_ids.type()));
 
 		for (size_t row = 0; row < this->height; ++row)
@@ -80,7 +80,7 @@ namespace Tracking
 
 	cv::Mat BlockArray::pixel_object_map() const
 	{
-		cv::Mat res(this->height * this->block_height, this->width * this->block_width, cv::DataType<id_t>::type);
+		cv::Mat res(this->height * this->block_height, this->width * this->block_width, BlockArray::cv_id_t);
 		for (auto const &block : this->_blocks)
 		{
 			for (int row = block.start_y; row < block.end_y; ++row)
@@ -97,7 +97,7 @@ namespace Tracking
 
 	cv::Mat BlockArray::object_map() const
 	{
-		cv::Mat res(this->height, this->width, cv::DataType<id_t>::type);
+		cv::Mat res(this->height, this->width, BlockArray::cv_id_t);
 		for (size_t row = 0; row < this->height; ++row)
 		{
 			for (size_t col = 0; col < this->width; ++col)
@@ -111,6 +111,16 @@ namespace Tracking
 	const BlockArray::Block &BlockArray::at(cv::Point coords) const
 	{
 		return this->at(coords.y, coords.x);
+	}
+
+	bool BlockArray::valid_coords(const cv::Point& coords) const
+	{
+		return this->valid_coords(coords.y, coords.x);
+	}
+
+	bool BlockArray::valid_coords(long row, long col) const
+	{
+		return (col >= 0) && (row >= 0) && (col < this->width) && (row < this->height);
 	}
 
 	BlockArray::Slit::Slit(size_t slit_y, size_t slit_x_start, size_t slit_x_end, size_t block_width,
