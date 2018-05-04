@@ -1,5 +1,6 @@
 #include "Tracking.h"
 #include "Utils.h"
+#include "StMrf.h"
 
 using namespace cv;
 
@@ -85,5 +86,41 @@ namespace Tracking
 		medianBlur(mask, mask2, 11);
 		addWeighted(background, 1 - weight, frame, weight, 0, dst);
 		dst.copyTo(background, mask2);
+	}
+
+	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame, const Mat &old_frame,
+	                           Mat &foreground, const Mat &background, double foreground_threshold)
+	{
+		auto const prev_pixel_map = blocks.pixel_object_map();
+		auto const object_map = blocks.object_map();
+		auto const group_coords = find_group_coordinates(object_map);
+
+		std::vector<Point> motion_vectors;
+		for (auto const &coords : group_coords)
+		{
+			motion_vectors.push_back(find_motion_vector(blocks, frame, old_frame, coords));
+		}
+
+		Mat labels = Mat::zeros(object_map.size(), BlockArray::cv_id_t);
+		if (!motion_vectors.empty())
+		{
+			std::vector<Point> motion_vectors_rounded;
+			for (auto const &vec : motion_vectors)
+			{
+				motion_vectors_rounded.push_back(round_motion_vector(vec, blocks.block_width, blocks.block_height));
+			}
+
+			foreground = subtract_background(frame, background, foreground_threshold);
+			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords, foreground);
+
+			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);
+			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
+		}
+
+		double max_lab;
+		minMaxLoc(labels, nullptr, &max_lab);
+
+		blocks.set_object_ids(labels);
+		update_slit_objects(blocks, slit, frame, background, static_cast<BlockArray::id_t>(max_lab) + 1, foreground_threshold);
 	}
 }

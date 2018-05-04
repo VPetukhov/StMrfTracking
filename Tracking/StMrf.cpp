@@ -226,33 +226,20 @@ namespace Tracking
 		return res_ids;
 	}
 
-	void reset_map_before_slit(object_ids_t &new_map, size_t slit_height, size_t slit_y,
-	                           const std::string &vehicle_direction, const BlockArray &blocks)
+	void reset_map_before_slit(object_ids_t &new_map, size_t slit_block_y, BlockArray::Slit::Direction vehicle_direction,
+	                           const BlockArray &blocks)
 	{
-		if (vehicle_direction == "up")
+		size_t start_row = 0, end_row = slit_block_y;
+		if (vehicle_direction == BlockArray::Slit::DOWN)
 		{
-			for (size_t row = 0; row < blocks.height; ++row)
-			{
-				if (blocks.at(row, 0).end_y <= slit_y + slit_height)
-					continue;
-
-				for (size_t col = 0; col < blocks.width; ++col)
-				{
-					new_map.at(row).at(col).clear();
-				}
-			}
-
-			return;
+			start_row = slit_block_y + 1;
+			end_row = blocks.height;
 		}
+		else if (vehicle_direction != BlockArray::Slit::UP)
+			throw std::runtime_error("Wrong vehicle direction: " + std::to_string(vehicle_direction));
 
-		if (vehicle_direction != "down")
-			throw std::runtime_error("Wrong vehicle direction: " + vehicle_direction);
-
-		for (size_t row = 0; row < blocks.height; ++row)
+		for (size_t row = start_row; row < end_row; ++row)
 		{
-			if (blocks.at(row, 0).end_y > slit_y)
-				break;
-
 			for (size_t col = 0; col < blocks.width; ++col)
 			{
 				new_map.at(row).at(col).clear();

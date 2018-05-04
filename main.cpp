@@ -16,7 +16,7 @@ using namespace Tracking;
 const size_t block_width = 8, block_height = 10;
 const size_t slit_y = 350, slit_x_start = 0, slit_x_end = 350;
 const double foreground_threshold = 0.05;
-const std::string vehicle_direction = "up";
+const auto vehicle_direction = BlockArray::Slit::DOWN;
 
 void draw_grid(Mat& img, const BlockArray &blocks)
 {
@@ -70,6 +70,24 @@ std::vector<Rect> bounding_boxes(const Mat &labels)
 	return rects;
 }
 
+bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Slit &slit)
+{
+	auto plot_map = blocks.pixel_object_map();
+	Mat plot_img = frame.clone();
+
+	for (auto const &bb : bounding_boxes(plot_map))
+	{
+		rectangle(plot_img, bb, CV_RGB(0, 255, 0), 1);
+	}
+	draw_slit(plot_img, blocks, slit);
+
+	imshow("edges", plot_img);
+	if(waitKey(30) >= 0)
+		return false;
+
+	return true;
+}
+
 int main()
 {
 	const std::string video_file("/home/viktor/VirtualBox VMs/Shared/VehicleTracking/vehicle_videos/4K_p2.mp4");
@@ -95,70 +113,25 @@ int main()
 	if (slit_y > frame.rows - frame.rows % block_height)
 		throw std::logic_error("Slit y is too large: " + std::to_string(slit_y));
 
-	BlockArray::Slit slit(slit_y, slit_x_start, slit_x_end, block_width, block_height, BlockArray::Slit::UP);
+	BlockArray::Slit slit(slit_y, slit_x_start, slit_x_end, block_width, block_height, vehicle_direction);
 
 //	draw_slit(frame, blocks, slit);
 //	show_image(frame);
 
 	Mat foreground = Mat::zeros(frame.rows, frame.cols, DataType<int>::type);
-	BlockArray::id_t new_object_id = 1;
-
 	namedWindow("edges", 1);
 	// Loop
 	int i = 0;
-	while (true)
+	Mat old_frame;
+	while (read_frame(cap, frame))
 	{
 		i++;
-		auto const prev_pixel_map = blocks.pixel_object_map();
-		update_slit_objects(blocks, slit, frame, background, new_object_id, foreground_threshold);
+		day_segmentation_step(blocks, slit, frame, old_frame, foreground, background, foreground_threshold);
 
-		Mat old_frame = frame;
-		if (!read_frame(cap, frame))
+		if (!plot_frame(frame, blocks, slit))
 			break;
 
-		auto const object_map = blocks.object_map();
-		auto const group_coords = find_group_coordinates(object_map);
-
-		std::vector<Point> motion_vectors;
-		for (auto const &coords : group_coords)
-		{
-			motion_vectors.push_back(find_motion_vector(blocks, frame, old_frame, coords));
-		}
-
-		Mat labels = Mat::zeros(object_map.size(), BlockArray::cv_id_t);
-		if (!motion_vectors.empty())
-		{
-			std::vector<Point> motion_vectors_rounded;
-			for (auto const &vec : motion_vectors)
-			{
-				motion_vectors_rounded.push_back(round_motion_vector(vec, block_width, block_height));
-			}
-
-			foreground = subtract_background(frame, background, foreground_threshold);
-			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords, foreground);
-
-			reset_map_before_slit(possible_object_ids, block_height, slit_y, vehicle_direction, blocks);
-			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
-		}
-
-		double max_lab;
-		minMaxLoc(labels, nullptr, &max_lab);
-		new_object_id = static_cast<BlockArray::id_t>(max_lab) + 1;
-		blocks.set_object_ids(labels);
-
-		auto plot_map = blocks.pixel_object_map();
-		Mat plot_img = frame.clone();
-
-		for (auto const &bb : bounding_boxes(plot_map))
-		{
-			rectangle(plot_img, bb, CV_RGB(0, 255, 0), 1);
-		}
-		draw_slit(plot_img, blocks, slit);
-
-		imshow("edges", plot_img);
-		if(waitKey(30) >= 0)
-			break;
-
+		old_frame = frame;
 		std::cout << ".";
 	}
 
