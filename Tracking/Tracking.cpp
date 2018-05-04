@@ -115,6 +115,8 @@ namespace Tracking
 
 			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);
 			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
+			labels.convertTo(labels, CV_8U);
+			connectedComponents(labels, labels);
 		}
 
 		double max_lab;
@@ -122,5 +124,94 @@ namespace Tracking
 
 		blocks.set_object_ids(labels);
 		update_slit_objects(blocks, slit, frame, background, static_cast<BlockArray::id_t>(max_lab) + 1, foreground_threshold);
+	}
+
+	Mat edge_image_hand_based(const Mat &image, double alpha=80, double beta = 0.02)
+	{
+		using pixel_t = unsigned char;
+		Mat input;
+		if (image.channels() != 1)
+		{
+			cvtColor(image, input, CV_BGR2GRAY);
+		}
+		else
+		{
+			input = image;
+		}
+
+		input.convertTo(input, DataType<pixel_t>::type);
+
+		Mat res(input.size(), input.type());
+		for (int row = 0; row < input.rows; ++row)
+		{
+			int row_min = std::max(0, row - 1);
+			int row_max = std::min(input.rows - 1, row + 1);
+
+			auto res_row_data = res.ptr<pixel_t>(row);
+			auto in_row_data = input.ptr<pixel_t>(row);
+			for (int col = 0; col < input.cols; ++col)
+			{
+				int col_min = max(0, col - 1);
+				int col_max = min(input.cols - 1, col + 1);
+
+				auto cur_pixel = in_row_data[col];
+
+				pixel_t max_val = 0, sum = 0;
+				for (int sub_row = row_min; sub_row <= row_max; ++sub_row)
+				{
+					auto sub_row_data = input.ptr<pixel_t>(sub_row);
+					for (int sub_col = col_min; sub_col <= col_max; ++sub_col)
+					{
+						auto adj_pixel = sub_row_data[sub_col];
+						sum += std::abs(adj_pixel - cur_pixel);
+						max_val = std::max(max_val, adj_pixel);
+					}
+				}
+
+				double u = sum / (max_val / 255.0);
+
+				res_row_data[col] = static_cast<pixel_t>(255.0 / (1.0 + std::exp(-beta * (u - alpha))));
+			}
+		}
+
+		return res;
+	}
+
+	Mat edge_image(const Mat &image)
+	{
+		Mat input;
+		if (image.channels() != 1)
+		{
+			cvtColor(image, input, CV_BGR2GRAY);
+		}
+		else
+		{
+			input = image;
+		}
+
+
+		Mat res = Mat::zeros(input.size(), input.type());
+
+		for (int i = 0; i < 9; ++i)
+		{
+			int row = i / 3, col = i % 3;
+			if (row == 1 && col == 1)
+				continue;
+
+			Mat sum_filter = Mat::zeros(3, 3, DataType<float>::type);
+			sum_filter.at<float>(1, 1) = -1;
+			sum_filter.at<float>(row, col) = 1;
+
+			Mat sum_image;
+			filter2D(input, sum_image, -1, sum_filter);
+			res += abs(sum_image);
+		}
+
+		Mat max_image;
+		dilate(input, max_image, Mat());
+
+		res /= max_image * 8;
+
+		return res;
 	}
 }

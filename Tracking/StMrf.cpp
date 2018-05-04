@@ -354,8 +354,8 @@ namespace Tracking
 				auto prev_x = block.x_coords() - vec.x;
 				auto prev_y = block.y_coords() - vec.y;
 
-				if (!valid_coords(prev_y.start, prev_x.start, frame.rows, frame.cols) ||
-						!valid_coords(prev_y.end, prev_x.end, frame.rows, frame.cols))
+				if (!valid_coords(prev_y.start, prev_x.start, prev_pixel_map.rows, prev_pixel_map.cols) ||
+						!valid_coords(prev_y.end, prev_x.end, prev_pixel_map.rows, prev_pixel_map.cols))
 				{
 					penalties.at<double>(block_id, group_id + 1) = 0; // TODO: process this case more cleverly
 //					std::cout << "Zero: " << prev_x.start << " " << prev_x.end << "; " << prev_y.start << " " << prev_y.end << std::endl;

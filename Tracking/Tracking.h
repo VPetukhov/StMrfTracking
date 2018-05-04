@@ -16,5 +16,7 @@ namespace Tracking
 	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame, const cv::Mat &old_frame,
 	                           cv::Mat &foreground, const cv::Mat &background, double foreground_threshold);
 	bool read_frame(cv::VideoCapture &reader, cv::Mat &frame, int height=480, int width=600);
+
+	cv::Mat edge_image(const cv::Mat &image);
 }
 

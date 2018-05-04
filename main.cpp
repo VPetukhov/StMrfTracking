@@ -13,7 +13,7 @@
 using namespace cv;
 using namespace Tracking;
 
-const size_t block_width = 8, block_height = 10;
+const size_t block_width = 16, block_height = 20;
 const size_t slit_y = 350, slit_x_start = 0, slit_x_end = 350;
 const double foreground_threshold = 0.05;
 const auto vehicle_direction = BlockArray::Slit::DOWN;
@@ -41,9 +41,10 @@ std::vector<Rect> bounding_boxes(const Mat &labels)
 	std::map<int, Rect> bounding_boxes;
 	for (int row = 0; row < labels.rows; ++row)
 	{
+		auto row_data = labels.ptr<BlockArray::id_t>(row);
 		for (int col = 0; col < labels.cols; ++col)
 		{
-			auto cur_lab = labels.at<BlockArray::id_t>(row, col);
+			auto cur_lab = row_data[col];
 			if (cur_lab == 0)
 				continue;
 
@@ -120,6 +121,7 @@ int main()
 
 	Mat foreground = Mat::zeros(frame.rows, frame.cols, DataType<int>::type);
 	namedWindow("edges", 1);
+
 	// Loop
 	int i = 0;
 	Mat old_frame;
@@ -128,7 +130,8 @@ int main()
 		i++;
 		day_segmentation_step(blocks, slit, frame, old_frame, foreground, background, foreground_threshold);
 
-		if (!plot_frame(frame, blocks, slit))
+		auto edge = edge_image(frame);
+		if (!plot_frame(edge, blocks, slit))
 			break;
 
 		old_frame = frame;
