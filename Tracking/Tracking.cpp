@@ -88,6 +88,45 @@ namespace Tracking
 		dst.copyTo(background, mask2);
 	}
 
+	Mat connected_components(const Mat &labels, std::map<BlockArray::id_t, BlockArray::id_t> &id_map)
+	{
+		if (labels.type() != BlockArray::cv_id_t)
+			throw std::runtime_error("Wrong image type: " + std::to_string(labels.type()));
+
+		Mat res, input;
+		labels.convertTo(input, CV_8U);
+
+		connectedComponents(input, res);
+		res.convertTo(res, labels.type());
+
+		double n_labels;
+		minMaxLoc(res, nullptr, &n_labels);
+
+		res += labels * (n_labels + 1);
+
+		std::map<BlockArray::id_t, BlockArray::id_t> new_ids;
+		for (int row = 0; row < labels.rows; ++row)
+		{
+			auto row_lab_data = labels.ptr<BlockArray::id_t>(row);
+			auto row_res_data = res.ptr<BlockArray::id_t>(row);
+			for (int col = 0; col < labels.cols; ++col)
+			{
+				auto cur_lab = row_res_data[col];
+				auto prev_lab = row_lab_data[col];
+				if (cur_lab == 0)
+					continue;
+
+				auto iter = new_ids.emplace(cur_lab, new_ids.size() + 1);
+				row_res_data[col] = iter.first->second;
+				auto it2 = id_map.emplace(iter.first->second, prev_lab);
+				if (!it2.second && it2.first->second != prev_lab)
+					throw std::runtime_error("Repeated ids");
+			}
+		}
+
+		return res;
+	}
+
 	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame, const Mat &old_frame,
 	                           Mat &foreground, const Mat &background, double foreground_threshold)
 	{
@@ -115,8 +154,9 @@ namespace Tracking
 
 			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);
 			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
-			labels.convertTo(labels, CV_8U);
-			connectedComponents(labels, labels);
+
+			std::map<BlockArray::id_t, BlockArray::id_t> id_map;
+			labels = connected_components(labels, id_map);
 		}
 
 		double max_lab;
@@ -124,57 +164,6 @@ namespace Tracking
 
 		blocks.set_object_ids(labels);
 		update_slit_objects(blocks, slit, frame, background, static_cast<BlockArray::id_t>(max_lab) + 1, foreground_threshold);
-	}
-
-	Mat edge_image_hand_based(const Mat &image, double alpha=80, double beta = 0.02)
-	{
-		using pixel_t = unsigned char;
-		Mat input;
-		if (image.channels() != 1)
-		{
-			cvtColor(image, input, CV_BGR2GRAY);
-		}
-		else
-		{
-			input = image;
-		}
-
-		input.convertTo(input, DataType<pixel_t>::type);
-
-		Mat res(input.size(), input.type());
-		for (int row = 0; row < input.rows; ++row)
-		{
-			int row_min = std::max(0, row - 1);
-			int row_max = std::min(input.rows - 1, row + 1);
-
-			auto res_row_data = res.ptr<pixel_t>(row);
-			auto in_row_data = input.ptr<pixel_t>(row);
-			for (int col = 0; col < input.cols; ++col)
-			{
-				int col_min = max(0, col - 1);
-				int col_max = min(input.cols - 1, col + 1);
-
-				auto cur_pixel = in_row_data[col];
-
-				pixel_t max_val = 0, sum = 0;
-				for (int sub_row = row_min; sub_row <= row_max; ++sub_row)
-				{
-					auto sub_row_data = input.ptr<pixel_t>(sub_row);
-					for (int sub_col = col_min; sub_col <= col_max; ++sub_col)
-					{
-						auto adj_pixel = sub_row_data[sub_col];
-						sum += std::abs(adj_pixel - cur_pixel);
-						max_val = std::max(max_val, adj_pixel);
-					}
-				}
-
-				double u = sum / (max_val / 255.0);
-
-				res_row_data[col] = static_cast<pixel_t>(255.0 / (1.0 + std::exp(-beta * (u - alpha))));
-			}
-		}
-
-		return res;
 	}
 
 	Mat edge_image(const Mat &image)
@@ -213,5 +202,10 @@ namespace Tracking
 		res /= max_image * 8;
 
 		return res;
+	}
+
+	cv::Mat interlayer_feedback(const cv::Mat &frame, const cv::Mat &labels)
+	{
+
 	}
 }

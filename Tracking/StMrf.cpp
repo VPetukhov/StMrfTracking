@@ -83,7 +83,7 @@ namespace Tracking
 		double max_val;
 		cv::minMaxLoc(labels, nullptr, &max_val);
 
-		group_coords_t group_coordinates(static_cast<size_t>(max_val) + 1);
+		group_coords_t group_coordinates(static_cast<size_t>(max_val));
 		for (size_t row = 0; row < labels.rows; ++row)
 		{
 			for (size_t col = 0; col < labels.cols; ++col)
@@ -92,7 +92,7 @@ namespace Tracking
 				if (lab == 0)
 					continue;
 
-				group_coordinates.at(lab).emplace_back(col, row);
+				group_coordinates.at(lab - 1).emplace_back(col, row);
 			}
 		}
 
@@ -189,6 +189,7 @@ namespace Tracking
 		{
 			auto const &gc = group_coords[i];
 			auto const &m_vec = motion_vecs[i];
+//			std::cout << i << ": " << m_vec << std::endl;
 
 			for (auto const &coords : gc)
 			{
@@ -285,19 +286,21 @@ namespace Tracking
 		auto data_cost = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
 		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame);
 
-//		for (size_t label = 0; label < data_cost.cols; ++label)
-//		{
-//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
-//			for (size_t row = 0; row < blocks.height; ++row)
-//			{
-//				for (size_t col = 0; col < blocks.width; ++col)
-//				{
-//					res.at<id_t>(row, col) = data_cost.at<int>(id_by_coords(row, col, blocks.width), label);
-//				}
-//			}
-//
-//			show_image(heatmap(res));
-//		}
+//		std::cout << motion_vectors.size() << " " << motion_vectors.at(0) << std::endl;
+		for (size_t label = 1; label < data_cost.cols; ++label)
+		{
+//			std::cout << motion_vectors.at(label) << std::endl;
+			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
+			for (size_t row = 0; row < blocks.height; ++row)
+			{
+				for (size_t col = 0; col < blocks.width; ++col)
+				{
+					res.at<id_t>(row, col) = data_cost.at<int>(id_by_coords(row, col, blocks.width), label);
+				}
+			}
+
+//			show_image(heatmap(res), 300000, "heatmap");
+		}
 
 //		for (size_t row = 0; row < blocks.height; ++row)
 //		{

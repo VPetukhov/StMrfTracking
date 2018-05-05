@@ -86,6 +86,7 @@ bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Sl
 	if(waitKey(30) >= 0)
 		return false;
 
+	show_image(heatmap(plot_map));
 	return true;
 }
 
@@ -128,14 +129,18 @@ int main()
 	while (read_frame(cap, frame))
 	{
 		i++;
+		std::cout << "Step " << i << std::endl;
 		day_segmentation_step(blocks, slit, frame, old_frame, foreground, background, foreground_threshold);
+		old_frame = frame;
 
-		auto edge = edge_image(frame);
-		if (!plot_frame(edge, blocks, slit))
+		if (i < 10)
+			continue;
+
+//		auto edge = edge_image(frame);
+		if (!plot_frame(frame, blocks, slit))
 			break;
 
-		old_frame = frame;
-		std::cout << ".";
+//		std::cout << ".";
 	}
 
 	return 0;

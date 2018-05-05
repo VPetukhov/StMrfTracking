@@ -17,6 +17,7 @@ namespace Tracking
 	                           cv::Mat &foreground, const cv::Mat &background, double foreground_threshold);
 	bool read_frame(cv::VideoCapture &reader, cv::Mat &frame, int height=480, int width=600);
 
+	cv::Mat connected_components(const cv::Mat &labels, std::map<BlockArray::id_t, BlockArray::id_t> &id_map);
 	cv::Mat edge_image(const cv::Mat &image);
 }
 
