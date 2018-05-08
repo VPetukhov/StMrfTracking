@@ -142,7 +142,7 @@ namespace Tracking
 	}
 
 	Mat motion_vector_similarity_map(const BlockArray &blocks, const Mat &frame, const Mat &old_frame,
-	                                 const Point &coords, int search_rad)
+	                                 const Point &coords, int search_rad, bool plot)
 	{
 		Mat similarity_map = Mat::zeros(blocks.block_height * search_rad * 2 + 1, blocks.block_width * search_rad * 2 + 1, DataType<double>::type);
 		if (!blocks.valid_coords(coords.y - search_rad, coords.x - search_rad) ||
@@ -159,9 +159,12 @@ namespace Tracking
 
 		matchTemplate(img_region, match_template, similarity_map, CV_TM_SQDIFF);
 
-//		show_image(img_region);
-//		show_image(match_template);
-//		show_image(similarity_map);
+		if (plot)
+		{
+			show_image(img_region);
+			show_image(match_template);
+			show_image(similarity_map);
+		}
 
 		return similarity_map;
 	}
@@ -189,7 +192,6 @@ namespace Tracking
 		{
 			auto const &gc = group_coords[i];
 			auto const &m_vec = motion_vecs[i];
-//			std::cout << i << ": " << m_vec << std::endl;
 
 			for (auto const &coords : gc)
 			{
@@ -285,22 +287,53 @@ namespace Tracking
 		auto group_coords = find_group_coordinates(object_id_map, object_ids);
 		auto data_cost = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
 		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame);
-
-//		std::cout << motion_vectors.size() << " " << motion_vectors.at(0) << std::endl;
-		for (size_t label = 1; label < data_cost.cols; ++label)
-		{
-//			std::cout << motion_vectors.at(label) << std::endl;
-			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
-			for (size_t row = 0; row < blocks.height; ++row)
-			{
-				for (size_t col = 0; col < blocks.width; ++col)
-				{
-					res.at<id_t>(row, col) = data_cost.at<int>(id_by_coords(row, col, blocks.width), label);
-				}
-			}
-
-//			show_image(heatmap(res), 300000, "heatmap");
-		}
+//		auto data_cost_img = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
+//		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame, 1e3, 1e3, true, false);
+//		auto data_cost_lab = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
+//		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame, 1e3, 1e3, false, true);
+//
+//		for (size_t label = 0; label < data_cost.cols; ++label)
+//		{
+//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
+//			for (size_t row = 0; row < blocks.height; ++row)
+//			{
+//				for (size_t col = 0; col < blocks.width; ++col)
+//				{
+//					res.at<id_t>(row, col) = data_cost.at<int>(id_by_coords(row, col, blocks.width), label);
+//				}
+//			}
+//
+//			std::cout << res.at<id_t>(14, 4) << " ";
+//		}
+//		std::cout << std::endl;
+//		for (size_t label = 0; label < data_cost.cols; ++label)
+//		{
+//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
+//			for (size_t row = 0; row < blocks.height; ++row)
+//			{
+//				for (size_t col = 0; col < blocks.width; ++col)
+//				{
+//					res.at<id_t>(row, col) = data_cost_img.at<int>(id_by_coords(row, col, blocks.width), label);
+//				}
+//			}
+//
+//			std::cout << res.at<id_t>(14, 4) << " ";
+//		}
+//		std::cout << std::endl;
+//		for (size_t label = 0; label < data_cost.cols; ++label)
+//		{
+//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
+//			for (size_t row = 0; row < blocks.height; ++row)
+//			{
+//				for (size_t col = 0; col < blocks.width; ++col)
+//				{
+//					res.at<id_t>(row, col) = data_cost_lab.at<int>(id_by_coords(row, col, blocks.width), label);
+//				}
+//			}
+//
+//			std::cout << res.at<id_t>(14, 4) << " ";
+//		}
+//		std::cout << std::endl;
 
 //		for (size_t row = 0; row < blocks.height; ++row)
 //		{
@@ -323,7 +356,8 @@ namespace Tracking
 //			}
 //		}
 
-		auto gco = gc_optimization_8_grid_graph(blocks.height, blocks.width, data_cost.cols);
+//		auto gco = gc_optimization_8_grid_graph(blocks.width, blocks.height, data_cost.cols);
+		auto gco = std::shared_ptr<GCoptimization>(new GCoptimizationGridGraph(blocks.width, blocks.height, data_cost.cols));
 		set_data_cost(gco, data_cost);
 		set_smooth_cost(gco, 1); // TODO: set to 20
 		gco->expansion();
@@ -338,7 +372,8 @@ namespace Tracking
 
 	Mat unary_penalties(const BlockArray &blocks, const std::vector<BlockArray::id_t> &object_ids,
 	                    const std::vector<Point> &motion_vectors, const group_coords_t &group_coords,
-	                    const Mat &prev_pixel_map, const Mat &frame, const Mat &prev_frame, double inf_val, double mult)
+	                    const Mat &prev_pixel_map, const Mat &frame, const Mat &prev_frame, double inf_val, double mult,
+	                    bool img_diff_cost, bool lab_diff_cost)
 	{
 		Mat penalties = Mat::zeros(blocks.height * blocks.width, group_coords.size() + 1, DataType<double>::type) + inf_val;
 		penalties(Range::all(), cv::Range(0, 1)) = 0;
@@ -354,27 +389,21 @@ namespace Tracking
 				int block_id = blocks.index(coords.y, coords.x);
 				auto const &block = blocks.at(block_id);
 				auto cur_colors = frame(block.y_coords(), block.x_coords());
-				auto prev_x = block.x_coords() - vec.x;
-				auto prev_y = block.y_coords() - vec.y;
+				auto prev_x = block.x_coords() + vec.x;
+				auto prev_y = block.y_coords() + vec.y;
 
 				if (!valid_coords(prev_y.start, prev_x.start, prev_pixel_map.rows, prev_pixel_map.cols) ||
 						!valid_coords(prev_y.end, prev_x.end, prev_pixel_map.rows, prev_pixel_map.cols))
 				{
-					penalties.at<double>(block_id, group_id + 1) = 0; // TODO: process this case more cleverly
-//					std::cout << "Zero: " << prev_x.start << " " << prev_x.end << "; " << prev_y.start << " " << prev_y.end << std::endl;
+					penalties.at<double>(block_id, group_id + 1) = 0;
 				}
 				else
 				{
 					auto prev_colors = prev_frame(prev_y, prev_x);
 					auto img_diffs = mean(abs(cur_colors - prev_colors));
 
-//					std::cout << img_diffs << std::endl;
-//					std::cout << img_diffs.rows << " " << img_diffs.cols << std::endl;
-
-					double img_diff = average(img_diffs, 3);
-					double lab_diff = mean(prev_pixel_map(prev_y, prev_x) != obj_id).val[0] / 255.0;
-
-//					std::cout << "Penalties: " << img_diff << " " << lab_diff << "; " << img_diffs.rows * img_diffs.rows << std::endl;
+					double img_diff = img_diff_cost ? average(img_diffs, 3) : 0;
+					double lab_diff = lab_diff_cost ? mean(prev_pixel_map(prev_y, prev_x) != obj_id).val[0] / 255.0 : 0;
 
 					penalties.at<double>(block_id, group_id + 1) = img_diff + lab_diff;
 				}

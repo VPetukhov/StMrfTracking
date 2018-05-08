@@ -64,7 +64,6 @@ namespace Tracking
 			if (++iter > max_iters)
 				break;
 
-			std::cout << threshold << std::endl;
 			for (auto const &frame : frames)
 			{
 				update_background_weighted(background, frame, threshold, weight);
@@ -127,8 +126,25 @@ namespace Tracking
 		return res;
 	}
 
+	void reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<Mat> &frames,
+	                         const std::deque<Mat> &backgrounds, double foreground_threshold)
+	{
+		if (frames.empty())
+			throw std::runtime_error("Empty frames");
+
+		for (long i = frames.size() - 2; i >= 0; --i)
+		{
+			day_segmentation_step(blocks, slit, frames[i], frames[i + 1], backgrounds[i], foreground_threshold);
+		}
+
+		for (size_t i = 1; i < frames.size(); ++i)
+		{
+			day_segmentation_step(blocks, slit, frames[i], frames[i - 1], backgrounds[i], foreground_threshold);
+		}
+	}
+
 	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame, const Mat &old_frame,
-	                           Mat &foreground, const Mat &background, double foreground_threshold)
+	                           const Mat &background, double foreground_threshold)
 	{
 		auto const prev_pixel_map = blocks.pixel_object_map();
 		auto const object_map = blocks.object_map();
@@ -149,7 +165,7 @@ namespace Tracking
 				motion_vectors_rounded.push_back(round_motion_vector(vec, blocks.block_width, blocks.block_height));
 			}
 
-			foreground = subtract_background(frame, background, foreground_threshold);
+			auto foreground = subtract_background(frame, background, foreground_threshold);
 			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords, foreground);
 
 			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);

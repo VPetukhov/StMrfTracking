@@ -25,7 +25,6 @@ set(INCLUDE_DIRS /home/viktor/local/anaconda3/include gco-v3.0/)
 include_directories(${INCLUDE_DIRS})
 
 FILE(GLOB OpenCV_LIBRARIES /home/viktor/local/anaconda3/lib/libopencv_*.so)
-message(${OpenCV_LIBRARIES})
 
 set(CMAKE_CXX_STANDARD 11)
 

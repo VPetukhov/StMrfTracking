@@ -23,7 +23,7 @@ namespace Tracking
 	group_coords_t find_group_coordinates(const object_ids_t &object_id_map, const std::set<BlockArray::id_t> &object_ids);
 
 	cv::Mat motion_vector_similarity_map(const BlockArray &blocks, const cv::Mat &frame, const cv::Mat &old_frame,
-	                                     const cv::Point &coords, int search_rad);
+	                                     const cv::Point &coords, int search_rad, bool plot=false);
 	cv::Point find_motion_vector(const BlockArray &blocks, const cv::Mat &frame, const cv::Mat &old_frame,
 	                             const coordinates_t &group_coords, size_t search_rad=1);
 	cv::Point round_motion_vector(const cv::Point &motion_vec, size_t block_width, size_t block_height);
@@ -42,6 +42,6 @@ namespace Tracking
 	cv::Mat unary_penalties(const BlockArray &blocks, const std::vector<BlockArray::id_t> &object_ids,
 	                        const std::vector<cv::Point> &motion_vectors, const group_coords_t &group_coords,
 	                        const cv::Mat &prev_pixel_map, const cv::Mat &frame, const cv::Mat &prev_frame,
-	                        double inf_val = 1e3, double mult=1e3);
+	                        double inf_val = 1e3, double mult=1e3, bool img_diff_cost=true, bool lab_diff_cost=true);
 };
 

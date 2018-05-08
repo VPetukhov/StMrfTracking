@@ -14,7 +14,7 @@ namespace Tracking
 		return -static_cast<int>(std::round(mult * std::log10(prob + 1e-20)));
 	}
 
-	gco_ptr_t gc_optimization_8_grid_graph(int height, int width, int n_labels)
+	gco_ptr_t gc_optimization_8_grid_graph(int width, int height, int n_labels)
 	{
 		auto gco = std::make_shared<GCoptimizationGeneralGraph>(height * width, n_labels);
 
