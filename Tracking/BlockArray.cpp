@@ -118,13 +118,12 @@ namespace Tracking
 		return Tracking::valid_coords(row, col, this->height, this->width);
 	}
 
-	BlockArray::Slit::Slit(size_t slit_y, size_t slit_x_start, size_t slit_x_end, size_t block_width,
-	                       size_t block_height, Direction direction)
-		: _block_y(slit_y / block_height)
-		, _block_xs(slit_x_end / block_width - slit_x_start / block_width)
-		, _direction(direction)
+	BlockArray::Slit::Slit(const Line &line, size_t block_width, size_t block_height)
+		: _block_y(line.y / block_height)
+		, _block_xs(line.x_right / block_width - line.x_left / block_width)
+		, _direction(line.direction)
 	{
-		std::iota(this->_block_xs.begin(), this->_block_xs.end(), slit_x_start / block_width);
+		std::iota(this->_block_xs.begin(), this->_block_xs.end(), line.x_left / block_width);
 	}
 
 	std::vector<size_t> BlockArray::Slit::block_xs() const
@@ -137,8 +136,15 @@ namespace Tracking
 		return this->_block_y;
 	}
 
-	BlockArray::Slit::Direction BlockArray::Slit::direction() const
+	BlockArray::Line::Direction BlockArray::Slit::direction() const
 	{
 		return this->_direction;
 	}
+
+	BlockArray::Line::Line(size_t y, size_t left_x, size_t right_x, Direction direction)
+		: y(y)
+		, x_left(left_x)
+		, x_right(right_x)
+		, direction(direction)
+	{}
 }

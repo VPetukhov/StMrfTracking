@@ -87,7 +87,7 @@ namespace Tracking
 		dst.copyTo(background, mask2);
 	}
 
-	Mat connected_components(const Mat &labels, std::map<BlockArray::id_t, BlockArray::id_t> &id_map)
+	Mat connected_components(const Mat &labels, id_map_t &step_id_map)
 	{
 		if (labels.type() != BlockArray::cv_id_t)
 			throw std::runtime_error("Wrong image type: " + std::to_string(labels.type()));
@@ -103,22 +103,23 @@ namespace Tracking
 
 		res += labels * (n_labels + 1);
 
-		std::map<BlockArray::id_t, BlockArray::id_t> new_ids;
+		std::map<BlockArray::id_t, BlockArray::id_t> ordered_ids;
 		for (int row = 0; row < labels.rows; ++row)
 		{
-			auto row_lab_data = labels.ptr<BlockArray::id_t>(row);
-			auto row_res_data = res.ptr<BlockArray::id_t>(row);
+			auto row_prev_labs = labels.ptr<BlockArray::id_t>(row);
+			auto row_cur_labs = res.ptr<BlockArray::id_t>(row);
 			for (int col = 0; col < labels.cols; ++col)
 			{
-				auto cur_lab = row_res_data[col];
-				auto prev_lab = row_lab_data[col];
-				if (cur_lab == 0)
+				auto unordered_lab = row_cur_labs[col];
+				auto prev_lab = row_prev_labs[col];
+				if (unordered_lab == 0)
 					continue;
 
-				auto iter = new_ids.emplace(cur_lab, new_ids.size() + 1);
-				row_res_data[col] = iter.first->second;
-				auto it2 = id_map.emplace(iter.first->second, prev_lab);
-				if (!it2.second && it2.first->second != prev_lab)
+				auto order_it = ordered_ids.emplace(unordered_lab, ordered_ids.size() + 1);
+				auto cur_lab = order_it.first->second;
+				row_cur_labs[col] = cur_lab;
+				auto step_map_it = step_id_map.emplace(cur_lab, prev_lab);
+				if (!step_map_it.second && step_map_it.first->second != prev_lab)
 					throw std::runtime_error("Repeated ids");
 			}
 		}
@@ -143,14 +144,15 @@ namespace Tracking
 		}
 	}
 
-	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame, const Mat &old_frame,
-	                           const Mat &background, double foreground_threshold)
+	id_map_t day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
+	                               const Mat &old_frame, const Mat &background, double foreground_threshold)
 	{
 		auto const prev_pixel_map = blocks.pixel_object_map();
 		auto const object_map = blocks.object_map();
 		auto const group_coords = find_group_coordinates(object_map);
 
 		std::vector<Point> motion_vectors;
+		id_map_t id_map;
 		for (auto const &coords : group_coords)
 		{
 			motion_vectors.push_back(find_motion_vector(blocks, frame, old_frame, coords));
@@ -171,7 +173,6 @@ namespace Tracking
 			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);
 			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
 
-			std::map<BlockArray::id_t, BlockArray::id_t> id_map;
 			labels = connected_components(labels, id_map);
 		}
 
@@ -180,6 +181,7 @@ namespace Tracking
 
 		blocks.set_object_ids(labels);
 		update_slit_objects(blocks, slit, frame, background, static_cast<BlockArray::id_t>(max_lab) + 1, foreground_threshold);
+		return id_map;
 	}
 
 	Mat edge_image(const Mat &image)
@@ -223,5 +225,105 @@ namespace Tracking
 	cv::Mat interlayer_feedback(const cv::Mat &frame, const cv::Mat &labels)
 	{
 
+	}
+
+	rect_map_t bounding_boxes(const BlockArray &blocks)
+	{
+		rect_map_t bounding_boxes;
+		for (size_t row = 0; row < blocks.height; ++row)
+		{
+			for (size_t col = 0; col < blocks.width; ++col)
+			{
+				auto const &block = blocks.at(row, col);
+				if (block.object_id == 0)
+					continue;
+
+				auto bb_it = bounding_boxes.find(block.object_id);
+				if (bb_it == bounding_boxes.end())
+				{
+					bb_it = bounding_boxes.emplace(block.object_id, Rect(block.start_x, block.start_y, 0, 0)).first;
+				}
+
+				auto const &bb = bb_it->second;
+				bb_it->second.y = std::min(bb.y, static_cast<int>(block.start_y));
+				bb_it->second.x = std::min(bb.x, static_cast<int>(block.start_x));
+				bb_it->second.height = std::max(bb.height, static_cast<int>(block.end_y - bb.y + 1));
+				bb_it->second.width = std::max(bb.width, static_cast<int>(block.end_x - bb.x + 1));
+			}
+		}
+
+		return bounding_boxes;
+	}
+
+	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const id_map_t &id_map,
+	                          const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
+	{
+		id_set_t res;
+		for (auto const &rect_it : b_boxes)
+		{
+			auto const &b_box = rect_it.second;
+			if (b_box.x + b_box.width < capture.x_left || b_box.x > capture.x_right)
+				continue;
+
+			auto id_map_iter = id_map.find(rect_it.first);
+			if (id_map_iter == id_map.end()) // New vehicle in the slit
+				continue;
+
+			if (vehicle_ids.find(id_map_iter->second) == vehicle_ids.end())
+				continue;
+
+			if (capture.direction == BlockArray::Line::UP)
+			{
+				int border_y = (capture_type == BlockArray::CROSS) ? (b_box.y + b_box.height) : b_box.y;
+				if (border_y > capture.y)
+					continue;
+			}
+			else
+			{
+				int border_y = (capture_type == BlockArray::CROSS) ? b_box.y : (b_box.y + b_box.height);
+				if (border_y < capture.y)
+					continue;
+			}
+
+			res.insert(rect_it.first);
+		}
+
+		return res;
+	}
+
+	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
+	{
+		id_set_t res;
+		for (auto const &rect_it : b_boxes)
+		{
+			auto const &b_box = rect_it.second;
+			if (capture.direction == BlockArray::Line::UP)
+			{
+				int border_y = (capture_type == BlockArray::CROSS) ? (b_box.y + b_box.height) : b_box.y;
+				if (border_y < capture.y)
+					continue;
+			}
+			else
+			{
+				int border_y = (capture_type == BlockArray::CROSS) ? b_box.y : (b_box.y + b_box.height);
+				if (border_y > capture.y)
+					continue;
+			}
+
+			res.insert(rect_it.first);
+		}
+
+		return res;
+	}
+
+	id_set_t register_vehicle_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
+	                               const Mat &old_frame, const Mat &background, double foreground_threshold,
+	                               const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
+	{
+		auto b_boxes_prev = bounding_boxes(blocks);
+		auto vehicle_ids = active_vehicle_ids(b_boxes_prev, capture, capture_type);
+		auto id_map = day_segmentation_step(blocks, slit, frame, old_frame, background, foreground_threshold);
+		auto b_boxes = bounding_boxes(blocks);
+		return register_vehicle(b_boxes, vehicle_ids, id_map, capture, capture_type);
 	}
 }

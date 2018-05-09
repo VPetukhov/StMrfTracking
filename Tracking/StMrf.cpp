@@ -229,16 +229,16 @@ namespace Tracking
 		return res_ids;
 	}
 
-	void reset_map_before_slit(object_ids_t &new_map, size_t slit_block_y, BlockArray::Slit::Direction vehicle_direction,
+	void reset_map_before_slit(object_ids_t &new_map, size_t slit_block_y, BlockArray::Line::Direction vehicle_direction,
 	                           const BlockArray &blocks)
 	{
 		size_t start_row = 0, end_row = slit_block_y;
-		if (vehicle_direction == BlockArray::Slit::DOWN)
+		if (vehicle_direction == BlockArray::Line::UP)
 		{
 			start_row = slit_block_y + 1;
 			end_row = blocks.height;
 		}
-		else if (vehicle_direction != BlockArray::Slit::UP)
+		else if (vehicle_direction != BlockArray::Line::DOWN)
 			throw std::runtime_error("Wrong vehicle direction: " + std::to_string(vehicle_direction));
 
 		for (size_t row = start_row; row < end_row; ++row)

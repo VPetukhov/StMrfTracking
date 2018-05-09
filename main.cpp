@@ -21,25 +21,26 @@ const size_t NA_VALUE = std::numeric_limits<size_t>::max();
 
 struct Params
 {
-	bool cant_parse = false;
 	size_t block_width = 16;
 	size_t block_height = 20;
+	bool cant_parse = false;
+	BlockArray::CaptureType capture_type = BlockArray::CaptureType::CROSS;
 	double foreground_threshold = 0.05;
-	size_t slit_y = NA_VALUE; // 350
-	size_t slit_x_left = NA_VALUE; // 0
-	size_t slit_x_right = NA_VALUE; // 350
-	BlockArray::Slit::Direction vehicle_direction = BlockArray::Slit::DOWN;
+	int frame_freq=1;
+	int reverse_history_size=5;
+	std::string video_file = "";
+	BlockArray::Line capture = BlockArray::Line(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP);
+	BlockArray::Line slit = BlockArray::Line(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP);
 };
+
+void save_vehicle(const Mat &img, const Rect &b_box, const std::string &path, size_t img_id);
 
 static void usage()
 {
 	std::cerr << SCRIPT_NAME <<":\n"
 	          << "SYNOPSIS\n"
-	          << "\t" << SCRIPT_NAME << " [options] -y slit_y -l slit_x_left -r slit_x_right video_file\n"
+	          << "\t" << SCRIPT_NAME << " [options] slit_y slit_x_left slit_x_right capture_y capture_x_left capture_x_right video_file\n"
 	          << "OPTIONS:\n"
-	          << "\t-y, --slit-y: y-coordinate of the slit\n"
-	          << "\t-l, --slit-x-left: left x-coordinate of the slit\n"
-	          << "\t-r, --slit-x-right: right x-coordinate of the slit\n"
 	          << "\t-h, --block-height: height of each block. Default: " << Params().block_height << "\n"
 	          << "\t-w, --block-width: width of each block. Default: " << Params().block_width << "\n"
 	          << "\t-t, --foreground-threshold: Threshold, used to distinguish background from foreground. Default: " << Params().foreground_threshold << "\n";
@@ -52,9 +53,6 @@ static Params parse_cmd_params(int argc, char **argv)
 	int option_index = 0;
 	int c;
 	static struct option long_options[] = {
-			{"slit-y",     	 required_argument, nullptr, 'y'},
-			{"slit-x-left",  required_argument, nullptr, 'l'},
-			{"slit-x-right", required_argument, nullptr, 'r'},
 			{"block-height", required_argument, nullptr, 'h'},
 			{"block-width",  required_argument,	nullptr, 'w'},
 			{"foreground-threshold", required_argument, nullptr, 't'},
@@ -64,15 +62,6 @@ static Params parse_cmd_params(int argc, char **argv)
 	{
 		switch (c)
 		{
-			case 'y':
-				params.slit_y = strtoul(optarg, nullptr, 10);
-				break;
-			case 'l' :
-				params.slit_x_left = strtoul(optarg, nullptr, 10);
-				break;
-			case 'r' :
-				params.slit_x_right = strtoul(optarg, nullptr, 10);
-				break;
 			case 'h' :
 				params.block_height = strtoul(optarg, nullptr, 10);
 				break;
@@ -89,29 +78,19 @@ static Params parse_cmd_params(int argc, char **argv)
 		}
 	}
 
-	if (optind > argc - 1)
+	if (optind > argc - 7)
 	{
-		std::cerr << SCRIPT_NAME << ": video file must be supplied" << std::endl;
 		params.cant_parse = true;
+		return params;
 	}
 
-	if (params.slit_y == NA_VALUE)
-	{
-		std::cerr << SCRIPT_NAME << ": slit-y parameter must be supplied" << std::endl;
-		params.cant_parse = true;
-	}
-
-	if (params.slit_x_left == NA_VALUE)
-	{
-		std::cerr << SCRIPT_NAME << ": slit-x-left parameter must be supplied" << std::endl;
-		params.cant_parse = true;
-	}
-
-	if (params.slit_x_right == NA_VALUE)
-	{
-		std::cerr << SCRIPT_NAME << ": slit-x-right parameter must be supplied" << std::endl;
-		params.cant_parse = true;
-	}
+	params.slit.y = strtol(argv[optind++], nullptr, 10);
+	params.slit.x_left = strtol(argv[optind++], nullptr, 10);
+	params.slit.x_right = strtol(argv[optind++], nullptr, 10);
+	params.capture.y = strtol(argv[optind++], nullptr, 10);
+	params.capture.x_left = strtol(argv[optind++], nullptr, 10);
+	params.capture.x_right = strtol(argv[optind++], nullptr, 10);
+	params.video_file = argv[optind++];
 
 	return params;
 }
@@ -125,62 +104,30 @@ void draw_grid(Mat& img, const BlockArray &blocks)
 	}
 }
 
-void draw_slit(Mat& img, const BlockArray &blocks, const BlockArray::Slit &slit)
+void draw_slit(Mat& img, const BlockArray &blocks, const BlockArray::Slit &slit, int thickness=1)
 {
 	auto block_start = blocks.at(slit.block_y(), slit.block_xs().front());
 	auto block_end = blocks.at(slit.block_y(), slit.block_xs().back());
 
-	line(img, Point(block_start.start_x, block_start.start_y), Point(block_end.end_x, block_start.start_y), CV_RGB(1, 0, 0));
-	line(img, Point(block_start.start_x, block_start.end_y), Point(block_end.end_x, block_start.end_y), CV_RGB(1, 0, 0));
+	line(img, Point(block_start.start_x, block_start.start_y), Point(block_end.end_x, block_start.start_y), CV_RGB(1, 0, 0), thickness);
+	line(img, Point(block_start.start_x, block_start.end_y), Point(block_end.end_x, block_start.end_y), CV_RGB(1, 0, 0), thickness);
 }
 
-std::vector<Rect> bounding_boxes(const Mat &labels)
-{
-	std::map<int, Rect> bounding_boxes;
-	for (int row = 0; row < labels.rows; ++row)
-	{
-		auto row_data = labels.ptr<BlockArray::id_t>(row);
-		for (int col = 0; col < labels.cols; ++col)
-		{
-			auto cur_lab = row_data[col];
-			if (cur_lab == 0)
-				continue;
-
-			auto bb_it = bounding_boxes.find(cur_lab);
-			if (bb_it == bounding_boxes.end())
-			{
-				bb_it = bounding_boxes.emplace(cur_lab, Rect(labels.cols, labels.rows, 0, 0)).first;
-			}
-
-			auto const &bb = bb_it->second;
-			bb_it->second.y = std::min(bb.y, row);
-			bb_it->second.x = std::min(bb.x, col);
-			bb_it->second.height = std::max(bb.height, row - bb.y + 1);
-			bb_it->second.width = std::max(bb.width, col - bb.x + 1);
-		}
-	}
-
-	std::vector<Rect> rects;
-	for (auto const &r : bounding_boxes)
-	{
-		rects.push_back(r.second);
-	}
-
-	return rects;
-}
-
-bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Slit &slit, int delay=30)
+bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Slit &slit, const BlockArray::Line &capture, int delay=30)
 {
 	auto plot_map = blocks.pixel_object_map();
 	Mat plot_img = frame.clone();
 
-	for (auto const &bb : bounding_boxes(plot_map))
+	for (auto const &bb : bounding_boxes(blocks))
+//	for (auto const &bb : bounding_boxes(plot_map))
 	{
-		rectangle(plot_img, bb, CV_RGB(0, 255, 0), 1);
+		rectangle(plot_img, bb.second, CV_RGB(0, 255, 0), 1);
 	}
-	draw_slit(plot_img, blocks, slit);
+	draw_slit(plot_img, blocks, slit, 2);
+	line(plot_img, Point(capture.x_left, capture.y), Point(capture.x_right, capture.y), CV_RGB(0, 0, 1), 2);
 
 	imshow("edges", plot_img);
+
 	if(waitKey(delay) >= 0)
 		return false;
 
@@ -193,13 +140,15 @@ int main(int argc, char **argv)
 {
 	Params p = parse_cmd_params(argc, argv);
 	if (p.cant_parse)
+	{
+		usage();
 		return 1;
+	}
 
-	const std::string video_file(argv[optind]);
-	VideoCapture cap(video_file);
+	VideoCapture cap(p.video_file);
 	if(!cap.isOpened())  // check if we succeeded
 	{
-		std::cerr << "Can't open video file: " << video_file << std::endl;
+		std::cerr << "Can't open video file: " << p.video_file << std::endl;
 		return 1;
 	}
 
@@ -218,10 +167,10 @@ int main(int argc, char **argv)
 	BlockArray blocks(background.rows / p.block_height, background.cols / p.block_width, p.block_height, p.block_width);
 //	draw_grid(frame, blocks);
 
-	if (p.slit_y > frame.rows - frame.rows % p.block_height)
-		throw std::logic_error("Slit y is too large: " + std::to_string(p.slit_y));
+	if (p.slit.y > frame.rows - frame.rows % p.block_height)
+		throw std::logic_error("Slit y is too large: " + std::to_string(p.slit.y));
 
-	BlockArray::Slit slit(p.slit_y, p.slit_x_left, p.slit_x_right, p.block_width, p.block_height, p.vehicle_direction);
+	BlockArray::Slit slit(p.slit, p.block_width, p.block_height);
 
 //	draw_slit(frame, blocks, slit);
 //	show_image(frame);
@@ -229,7 +178,8 @@ int main(int argc, char **argv)
 	namedWindow("edges", 1);
 
 	// Loop
-	int i = 0;
+	int i = 1;
+	size_t out_id = 0;
 	Mat old_frame;
 	std::deque<Mat> frames, backgrounds;
 	frames.push_back(frame.clone());
@@ -237,30 +187,67 @@ int main(int argc, char **argv)
 
 	while (read_frame(cap, frame))
 	{
-		if (++i % 5 != 0)
+		if (++i % p.frame_freq != 0)
 			continue;
 
 		frames.push_back(frame.clone());
 		backgrounds.push_back(background.clone());
 
-		if (frames.size() > 5)
+		if (frames.size() > p.reverse_history_size)
 		{
 			frames.pop_front();
 			backgrounds.pop_front();
 		}
 
 		std::cout << "Step " << i << std::endl;
-//		day_segmentation_step(blocks, slit, frame, old_frame, background, p.foreground_threshold);
-//		old_frame = frame;
+		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
+		                                             p.capture, p.capture_type);
+		auto b_boxes = bounding_boxes(blocks);
+#ifdef DEBUG
+		std::cout << "Active vehicle: ";
+		for (auto id : vehicle_ids)
+		{
+			std::cout << id << " -> [" << b_boxes_prev.at(id).y << " " << (b_boxes_prev.at(id).y + b_boxes_prev.at(id).height) << "]; ";
+		}
+		std::cout << std::endl;
 
-		reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold);
+		std::cout << "Id map: ";
+		for (auto pair : id_map)
+		{
+			std::cout << pair.first << " -> " << pair.second << "; ";
+		}
+		std::cout << std::endl;
+#endif
+		for (auto id : reg_vehicle_ids)
+		{
+//			std::cout << id << ": " << out_id << std::endl;
+//			show_image(Mat(frame, b_boxes.at(id)));
+//			show_image(Mat(old_frame, b_boxes_prev.at(id_map.at(id))));
+			save_vehicle(frame, b_boxes.at(id), "/home/viktor/tmp/vehicle/",  out_id++);
+		}
+
+		old_frame = frame;
+
+//		reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold);
 
 //		auto edge = edge_image(frame);
-		if (!plot_frame(frame, blocks, slit, 30 * 5))
+//		if (i < 150)
+//			continue;
+
+		if (!plot_frame(frame, blocks, slit, p.capture, 30 * p.frame_freq))
 			break;
 
 //		std::cout << ".";
 	}
 
 	return 0;
+}
+
+void save_vehicle(const Mat &img, const Rect &b_box, const std::string &path, size_t img_id)
+{
+	std::cout << path + "/v" + std::to_string(img_id) + ".png" << " ";
+	Mat out_img = Mat(img, b_box) * 255;
+	out_img.convertTo(out_img, CV_8UC3);
+	show_image(out_img);
+	std::cout << imwrite(path + "/v" + std::to_string(img_id) + ".png", out_img) << std::endl;
 }

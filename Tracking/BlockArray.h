@@ -12,6 +12,31 @@ namespace Tracking
 	public:
 		using id_t = int;
 
+		enum CaptureType
+		{
+			CROSS,
+			TOUCH
+		};
+
+		class Line
+		{
+		public:
+			enum Direction
+			{
+				UP,
+				DOWN
+			};
+
+		public:
+			size_t y;
+			size_t x_left;
+			size_t x_right;
+			Direction direction;
+
+		public:
+			Line(size_t y, size_t left_x, size_t right_x, Direction direction);
+		};
+
 		class Block
 		{
 		public:
@@ -28,23 +53,16 @@ namespace Tracking
 
 		class Slit
 		{
-		public:
-			enum Direction
-			{
-				UP,
-				DOWN
-			};
-
 		private:
 			std::vector<size_t> _block_xs;
 			size_t _block_y;
-			Direction _direction;
+			Line::Direction _direction;
 
 		public:
 			std::vector<size_t> block_xs() const;
 			size_t block_y() const;
-			Direction direction() const;
-			Slit(size_t slit_y, size_t slit_x_start, size_t slit_x_end, size_t block_width, size_t block_height, Direction direction);
+			Line::Direction direction() const;
+			Slit(const Line &line, size_t block_width, size_t block_height);
 		};
 
 	private:
