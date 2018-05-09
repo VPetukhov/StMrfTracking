@@ -124,21 +124,25 @@ namespace Tracking
 		return res;
 	}
 
-	void reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<Mat> &frames,
-	                         const std::deque<Mat> &backgrounds, double foreground_threshold)
+	id_set_t reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<Mat> &frames,
+	                             const std::deque<Mat> &backgrounds, double foreground_threshold,
+		                         const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
 	{
 		if (frames.empty())
 			throw std::runtime_error("Empty frames");
 
+		id_set_t ids;
 		for (long i = frames.size() - 2; i >= 0; --i)
 		{
-			day_segmentation_step(blocks, slit, frames[i], frames[i + 1], backgrounds[i], foreground_threshold);
+			ids = register_vehicle_step(blocks, slit, frames[i], frames[i + 1], backgrounds[i], foreground_threshold, capture, capture_type);
 		}
 
 		for (size_t i = 1; i < frames.size(); ++i)
 		{
-			day_segmentation_step(blocks, slit, frames[i], frames[i - 1], backgrounds[i], foreground_threshold);
+			ids = register_vehicle_step(blocks, slit, frames[i], frames[i - 1], backgrounds[i], foreground_threshold, capture, capture_type);
 		}
+
+		return ids;
 	}
 
 	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,

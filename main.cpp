@@ -26,7 +26,7 @@ struct Params
 	bool cant_parse = false;
 	BlockArray::CaptureType capture_type = BlockArray::CaptureType::CROSS;
 	double foreground_threshold = 0.05;
-	int frame_freq=1;
+	int frame_freq=5;
 	std::string out_dir = "";
 	int reverse_history_size=5;
 	std::string video_file = "";
@@ -212,8 +212,10 @@ int main(int argc, char **argv)
 		}
 
 		std::cout << "Step " << i << std::endl;
-		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
-		                                             p.capture, p.capture_type);
+//		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
+//		                                             p.capture, p.capture_type);
+		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
+		                                           p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(blocks);
 		for (auto id : reg_vehicle_ids)
 		{
