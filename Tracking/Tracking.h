@@ -23,11 +23,11 @@ namespace Tracking
 	void update_background_weighted(cv::Mat &background, const cv::Mat &frame, double threshold, double weight);
 	void reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<cv::Mat> &frames,
 	                         const std::deque<cv::Mat> &backgrounds, double foreground_threshold);
-	id_map_t day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
-	                               const cv::Mat &old_frame, const cv::Mat &background, double foreground_threshold);
+	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
+	                           const cv::Mat &old_frame, const cv::Mat &background, double foreground_threshold);
 	bool read_frame(cv::VideoCapture &reader, cv::Mat &frame, int height=480, int width=600);
 
-	cv::Mat connected_components(const cv::Mat &labels, id_map_t &step_id_map);
+	cv::Mat connected_components(const cv::Mat &labels);
 	cv::Mat edge_image(const cv::Mat &image);
 
 	rect_map_t bounding_boxes(const BlockArray &blocks);

@@ -101,21 +101,15 @@ namespace Tracking
 
 	group_coords_t find_group_coordinates(const object_ids_t &object_id_map, const std::set<BlockArray::id_t> &object_ids)
 	{
-		std::map<BlockArray::id_t, size_t> id_id_map;
-		size_t i = 0;
-		for (auto id : object_ids)
-		{
-			id_id_map.emplace(id, i++);
-		}
+		group_coords_t group_coordinates(*std::max_element(object_ids.begin(), object_ids.end()));
 
-		group_coords_t group_coordinates(object_ids.size());
 		for (size_t row = 0; row < object_id_map.size(); ++row)
 		{
 			for (size_t col = 0; col < object_id_map.at(row).size(); ++col)
 			{
 				for (auto const &id : object_id_map.at(row).at(col))
 				{
-					group_coordinates.at(id_id_map.at(id)).emplace_back(col, row);
+					group_coordinates.at(id - 1).emplace_back(col, row);
 				}
 			}
 		}
@@ -272,16 +266,18 @@ namespace Tracking
 	Mat label_map_gco(const BlockArray &blocks, const object_ids_t &object_id_map, const std::vector<Point> &motion_vectors,
 	                  const Mat &prev_pixel_map, const Mat &frame, const Mat &prev_frame)
 	{
+		size_t max_size = 0;
 		std::set<BlockArray::id_t> object_ids;
 		for (auto const &row : object_id_map)
 		{
 			for (auto const &col : row)
 			{
 				object_ids.insert(col.begin(), col.end());
+				max_size = std::max(max_size, col.size());
 			}
 		}
 
-		if (object_ids.size() < 2)
+		if (max_size < 2)
 			return label_map_naive(object_id_map);
 
 		auto group_coords = find_group_coordinates(object_id_map, object_ids);
@@ -378,11 +374,10 @@ namespace Tracking
 		Mat penalties = Mat::zeros(blocks.height * blocks.width, group_coords.size() + 1, DataType<double>::type) + inf_val;
 		penalties(Range::all(), cv::Range(0, 1)) = 0;
 
-		for (size_t group_id = 0; group_id < group_coords.size(); ++group_id)
+		for (auto obj_id : object_ids)
 		{
-			auto const &gc = group_coords.at(group_id);
-			auto const &vec = motion_vectors.at(group_id);
-			auto const &obj_id = object_ids.at(group_id);
+			auto const &gc = group_coords.at(obj_id - 1);
+			auto const &vec = motion_vectors.at(obj_id - 1);
 
 			for (auto const &coords : gc)
 			{
@@ -395,7 +390,7 @@ namespace Tracking
 				if (!valid_coords(prev_y.start, prev_x.start, prev_pixel_map.rows, prev_pixel_map.cols) ||
 						!valid_coords(prev_y.end, prev_x.end, prev_pixel_map.rows, prev_pixel_map.cols))
 				{
-					penalties.at<double>(block_id, group_id + 1) = 0;
+					penalties.at<double>(block_id, obj_id) = 0;
 				}
 				else
 				{
@@ -405,7 +400,7 @@ namespace Tracking
 					double img_diff = img_diff_cost ? average(img_diffs, 3) : 0;
 					double lab_diff = lab_diff_cost ? mean(prev_pixel_map(prev_y, prev_x) != obj_id).val[0] / 255.0 : 0;
 
-					penalties.at<double>(block_id, group_id + 1) = img_diff + lab_diff;
+					penalties.at<double>(block_id, obj_id) = img_diff + lab_diff;
 				}
 
 				penalties.at<double>(block_id, 0) = inf_val;

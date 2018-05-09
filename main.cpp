@@ -27,6 +27,7 @@ struct Params
 	BlockArray::CaptureType capture_type = BlockArray::CaptureType::CROSS;
 	double foreground_threshold = 0.05;
 	int frame_freq=1;
+	std::string out_dir = "";
 	int reverse_history_size=5;
 	std::string video_file = "";
 	BlockArray::Line capture = BlockArray::Line(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP);
@@ -39,11 +40,12 @@ static void usage()
 {
 	std::cerr << SCRIPT_NAME <<":\n"
 	          << "SYNOPSIS\n"
-	          << "\t" << SCRIPT_NAME << " [options] slit_y slit_x_left slit_x_right capture_y capture_x_left capture_x_right video_file\n"
+	          << "\t" << SCRIPT_NAME << " [options] -o out_dir slit_y slit_x_left slit_x_right capture_y capture_x_left capture_x_right video_file\n"
 	          << "OPTIONS:\n"
 	          << "\t-h, --block-height: height of each block. Default: " << Params().block_height << "\n"
 	          << "\t-w, --block-width: width of each block. Default: " << Params().block_width << "\n"
-	          << "\t-t, --foreground-threshold: Threshold, used to distinguish background from foreground. Default: " << Params().foreground_threshold << "\n";
+	          << "\t-t, --foreground-threshold: Threshold, used to distinguish background from foreground. Default: " << Params().foreground_threshold << "\n"
+	          << "\t-o, --output-dir: Output directory. Default: " << Params().out_dir << "\n";
 }
 
 static Params parse_cmd_params(int argc, char **argv)
@@ -58,7 +60,7 @@ static Params parse_cmd_params(int argc, char **argv)
 			{"foreground-threshold", required_argument, nullptr, 't'},
 			{nullptr, 0, nullptr, 0}
 	};
-	while ((c = getopt_long(argc, argv, "y:l:r:h:w:t:", long_options, &option_index)) != -1)
+	while ((c = getopt_long(argc, argv, "y:l:r:h:o:w:t:", long_options, &option_index)) != -1)
 	{
 		switch (c)
 		{
@@ -71,11 +73,21 @@ static Params parse_cmd_params(int argc, char **argv)
 			case 't' :
 				params.foreground_threshold = strtod(optarg, nullptr);
 				break;
+			case 'o' :
+				params.out_dir = std::string(optarg);
+				break;
 			default:
 				std::cerr << SCRIPT_NAME << ": unknown arguments passed: '" << (char)c <<"'"  << std::endl;
 				params.cant_parse = true;
 				return params;
 		}
+	}
+
+	if (params.out_dir.empty())
+	{
+		std::cerr << "Output directory must be supplied" << std::endl;
+		params.cant_parse = true;
+		return params;
 	}
 
 	if (optind > argc - 7)
@@ -117,9 +129,9 @@ bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Sl
 {
 	auto plot_map = blocks.pixel_object_map();
 	Mat plot_img = frame.clone();
+//	Mat plot_img = heatmap(plot_map);
 
 	for (auto const &bb : bounding_boxes(blocks))
-//	for (auto const &bb : bounding_boxes(plot_map))
 	{
 		rectangle(plot_img, bb.second, CV_RGB(0, 255, 0), 1);
 	}
@@ -203,27 +215,12 @@ int main(int argc, char **argv)
 		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
 		                                             p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(blocks);
-#ifdef DEBUG
-		std::cout << "Active vehicle: ";
-		for (auto id : vehicle_ids)
-		{
-			std::cout << id << " -> [" << b_boxes_prev.at(id).y << " " << (b_boxes_prev.at(id).y + b_boxes_prev.at(id).height) << "]; ";
-		}
-		std::cout << std::endl;
-
-		std::cout << "Id map: ";
-		for (auto pair : id_map)
-		{
-			std::cout << pair.first << " -> " << pair.second << "; ";
-		}
-		std::cout << std::endl;
-#endif
 		for (auto id : reg_vehicle_ids)
 		{
 //			std::cout << id << ": " << out_id << std::endl;
 //			show_image(Mat(frame, b_boxes.at(id)));
 //			show_image(Mat(old_frame, b_boxes_prev.at(id_map.at(id))));
-			save_vehicle(frame, b_boxes.at(id), "/home/viktor/tmp/vehicle/",  out_id++);
+			save_vehicle(frame, b_boxes.at(id), p.out_dir,  out_id++);
 		}
 
 		old_frame = frame;
@@ -245,9 +242,11 @@ int main(int argc, char **argv)
 
 void save_vehicle(const Mat &img, const Rect &b_box, const std::string &path, size_t img_id)
 {
-	std::cout << path + "/v" + std::to_string(img_id) + ".png" << " ";
 	Mat out_img = Mat(img, b_box) * 255;
 	out_img.convertTo(out_img, CV_8UC3);
-	show_image(out_img);
-	std::cout << imwrite(path + "/v" + std::to_string(img_id) + ".png", out_img) << std::endl;
+//	show_image(out_img);
+
+	auto out_filename = path + "/v" + std::to_string(img_id) + ".png";
+	if (!imwrite(out_filename, out_img))
+		throw std::runtime_error("Can't write image: '" + out_filename + "'");
 }
