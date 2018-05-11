@@ -18,7 +18,8 @@ using namespace cv;
 using namespace Tracking;
 
 static const std::string SCRIPT_NAME = "stmrf";
-const size_t NA_VALUE = std::numeric_limits<size_t>::max();
+static const std::string WINDOW_NAME = "Detection";
+static const size_t NA_VALUE = std::numeric_limits<size_t>::max();
 
 struct Params
 {
@@ -27,7 +28,7 @@ struct Params
 	bool cant_parse = false;
 	BlockArray::CaptureType capture_type = BlockArray::CaptureType::CROSS;
 	double foreground_threshold = 0.05;
-	int frame_freq=5;
+	int frame_freq=1;
 	std::string out_dir = "";
 	int reverse_history_size=5;
 	std::string video_file = "";
@@ -139,7 +140,7 @@ bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Sl
 	draw_slit(plot_img, blocks, slit, 2);
 	line(plot_img, Point(capture.x_left, capture.y), Point(capture.x_right, capture.y), CV_RGB(0, 0, 1), 2);
 
-	imshow("edges", plot_img);
+	imshow(WINDOW_NAME, plot_img);
 
 	if(waitKey(delay) >= 0)
 		return false;
@@ -165,19 +166,17 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-
-//	Mat im = imread("/home/viktor/Yandex.Disk/Upwork/VehicleTracking/data/headlight_images/headlight3.jpg", IMREAD_GRAYSCALE);
-//	show_image(heatmap(detect_headlights(im)));
+//	Mat img = imread("/home/viktor/tmp/test.jpg");
+//	show_image(img);
+//	show_image(detect_headlights(img));
 //	return 0;
 
-
-
-//	Mat background = estimate_background(video_file, 300, 0.05, 3);
+//	Mat background = estimate_background(p.video_file, 300, 0.05, 3);
 //
 //	Mat back_out;
 //	background.convertTo(back_out, DataType<int>::type, 255);
-//	imwrite("./bacgkround.jpg", back_out);
-	Mat back_in = imread("./bacgkround.jpg");
+//	imwrite("./bacgkround_night.jpg", back_out);
+	Mat back_in = imread("./bacgkround_night.jpg");
 	Mat background;
 	back_in.convertTo(background, DataType<float>::type, 1 / 255.0);
 
@@ -195,7 +194,7 @@ int main(int argc, char **argv)
 //	draw_slit(frame, blocks, slit);
 //	show_image(frame);
 
-	namedWindow("edges", 1);
+	namedWindow(WINDOW_NAME, 1);
 
 	// Loop
 	int i = 1;
@@ -220,31 +219,22 @@ int main(int argc, char **argv)
 		}
 
 		std::cout << "Step " << i << std::endl;
-		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
+
+		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame, old_frame, background, p.foreground_threshold,
 		                                             p.capture, p.capture_type);
+
 //		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
 //		                                           p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(blocks);
 		for (auto id : reg_vehicle_ids)
 		{
-//			std::cout << id << ": " << out_id << std::endl;
-//			show_image(Mat(frame, b_boxes.at(id)));
-//			show_image(Mat(old_frame, b_boxes_prev.at(id_map.at(id))));
 			save_vehicle(frame, b_boxes.at(id), p.out_dir,  out_id++);
 		}
 
 		old_frame = frame;
 
-//		reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold);
-
-//		auto edge = edge_image(frame);
-//		if (i < 150)
-//			continue;
-
 		if (!plot_frame(frame, blocks, slit, p.capture, 30 * p.frame_freq))
 			break;
-
-//		std::cout << ".";
 	}
 
 	return 0;

@@ -24,19 +24,21 @@ namespace Tracking
 	id_set_t reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<cv::Mat> &frames,
 	                             const std::deque<cv::Mat> &backgrounds, double foreground_threshold,
 	                             const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
-	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
-	                           const cv::Mat &old_frame, const cv::Mat &background, double foreground_threshold);
+	void segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
+	                       const cv::Mat &old_frame, const cv::Mat &foreground);
 	bool read_frame(cv::VideoCapture &reader, cv::Mat &frame, int height=480, int width=600);
 
 	cv::Mat connected_components(const cv::Mat &labels);
 	cv::Mat edge_image(const cv::Mat &image);
 
+	bool is_night(const cv::Mat &img, double threshold_red = 0.75, double threshold_bright = 0.35);
+
 	rect_map_t bounding_boxes(const BlockArray &blocks);
 	id_set_t register_vehicle_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
 	                               const cv::Mat &old_frame, const cv::Mat &background, double foreground_threshold,
 	                               const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
-	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const id_map_t &id_map,
-	                          const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
+	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Line &capture,
+	                          BlockArray::CaptureType capture_type);
 	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
 }
 

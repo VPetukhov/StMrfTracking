@@ -9,8 +9,8 @@ using namespace cv;
 
 namespace Tracking
 {
-	BlockArray::id_t update_slit_objects(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
-	                                     const Mat &background, BlockArray::id_t new_block_id, double threshold)
+	BlockArray::id_t update_slit_objects(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &foreground,
+	                                     BlockArray::id_t new_block_id)
 	{
 		const int d_xs[] = {0, 1, 1, 1, 0, -1, -1, -1, 0};
 		const int d_ys[] = {-1, -1, 0, 1, 1, 1, 0, -1, 0};
@@ -21,7 +21,7 @@ namespace Tracking
 		{
 			auto block_x = slit.block_xs()[slit_block_id];
 			auto &block = blocks.at(slit.block_y(), block_x);
-			if (!is_foreground(block, frame, background, threshold))
+			if (!is_foreground(block, foreground))
 				continue;
 
 			if (block.object_id > 0)

@@ -1,6 +1,7 @@
 #include "Tracking.h"
 #include "Utils.h"
 #include "StMrf.h"
+#include "NightDetection.h"
 
 //#define DEBUG
 
@@ -15,7 +16,6 @@ namespace Tracking
 
 		Mat small_frame(height, width, frame.type());
 		resize(frame, small_frame, small_frame.size());
-//		frame = small_frame;
 		small_frame.convertTo(frame, DataType<float>::type, 1 / 255.0);
 		return true;
 	}
@@ -145,8 +145,8 @@ namespace Tracking
 		return ids;
 	}
 
-	void day_segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
-	                           const Mat &old_frame, const Mat &background, double foreground_threshold)
+	void segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
+	                       const Mat &old_frame, const Mat &foreground)
 	{
 		auto const prev_pixel_map = blocks.pixel_object_map();
 		auto const object_map = blocks.object_map();
@@ -167,7 +167,6 @@ namespace Tracking
 				motion_vectors_rounded.push_back(round_motion_vector(vec, blocks.block_width, blocks.block_height));
 			}
 
-			auto foreground = subtract_background(frame, background, foreground_threshold);
 			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords, foreground);
 
 			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);
@@ -178,7 +177,7 @@ namespace Tracking
 		minMaxLoc(labels, nullptr, &max_lab);
 
 		blocks.set_object_ids(labels);
-		update_slit_objects(blocks, slit, frame, background, static_cast<BlockArray::id_t>(max_lab) + 1, foreground_threshold);
+		update_slit_objects(blocks, slit, foreground, static_cast<BlockArray::id_t>(max_lab) + 1);
 	}
 
 	Mat edge_image(const Mat &image)
@@ -309,6 +308,26 @@ namespace Tracking
 		return res;
 	}
 
+	bool is_night(const Mat &img, double threshold_red, double threshold_bright)
+	{
+		Mat inp = img.clone();
+		if (img.type() == CV_32FC3 || img.type() == CV_64FC3)
+		{
+			inp = inp * 255;
+			inp.convertTo(inp, CV_8UC1);
+		}
+
+		Mat hsv_img, hsv[3];
+		cvtColor(inp, hsv_img, COLOR_RGB2HSV);
+		split(hsv_img, hsv);
+
+		double red_frac = mean(hsv[0] < 0.2 * 255 | hsv[0] > 0.8 * 255).val[0] / 255.0;
+		double bright_frac = mean(hsv[2] > 150).val[0] / 255.0;
+
+//	std::cout << red_frac << " " << bright_frac << std::endl;
+		return (red_frac > threshold_red) | (bright_frac > threshold_bright);
+	}
+
 	id_set_t register_vehicle_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
 	                               const Mat &old_frame, const Mat &background, double foreground_threshold,
 	                               const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
@@ -318,7 +337,18 @@ namespace Tracking
 
 		auto b_boxes_prev = bounding_boxes(blocks);
 		auto vehicle_ids = active_vehicle_ids(b_boxes_prev, capture, capture_type);
-		day_segmentation_step(blocks, slit, frame, old_frame, background, foreground_threshold);
+
+		Mat foreground;
+		if (is_night(frame))
+		{
+			foreground = detect_headlights(frame);
+		}
+		else
+		{
+			foreground = subtract_background(frame, background, foreground_threshold);
+		}
+
+		segmentation_step(blocks, slit, frame, old_frame, foreground);
 		auto b_boxes = bounding_boxes(blocks);
 		auto registered_ids = register_vehicle(b_boxes, vehicle_ids, capture, capture_type);
 

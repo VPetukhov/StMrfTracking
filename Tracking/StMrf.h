@@ -16,8 +16,8 @@ namespace Tracking
 
 	bool is_foreground(const BlockArray::Block &block, const cv::Mat &frame, const cv::Mat &background, double threshold);
 	bool is_foreground(const BlockArray::Block &block, const cv::Mat &foreground);
-	BlockArray::id_t update_slit_objects(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
-	                                     const cv::Mat &background, int new_block_id, double threshold);
+	BlockArray::id_t update_slit_objects(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &foreground,
+	                                     int new_block_id);
 
 	group_coords_t find_group_coordinates(const cv::Mat &labels);
 	group_coords_t find_group_coordinates(const object_ids_t &object_id_map, const std::set<BlockArray::id_t> &object_ids);
