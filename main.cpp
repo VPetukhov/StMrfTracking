@@ -12,6 +12,7 @@
 #include "Tracking/StMrf.h"
 #include "Tracking/Tracking.h"
 #include "Tracking/Utils.h"
+#include "Tracking/NightDetection.h"
 
 using namespace cv;
 using namespace Tracking;
@@ -164,6 +165,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+
+//	Mat im = imread("/home/viktor/Yandex.Disk/Upwork/VehicleTracking/data/headlight_images/headlight3.jpg", IMREAD_GRAYSCALE);
+//	show_image(heatmap(detect_headlights(im)));
+//	return 0;
+
+
+
 //	Mat background = estimate_background(video_file, 300, 0.05, 3);
 //
 //	Mat back_out;
@@ -212,10 +220,10 @@ int main(int argc, char **argv)
 		}
 
 		std::cout << "Step " << i << std::endl;
-//		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
-//		                                             p.capture, p.capture_type);
-		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
-		                                           p.capture, p.capture_type);
+		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame,old_frame, background, p.foreground_threshold,
+		                                             p.capture, p.capture_type);
+//		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
+//		                                           p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(blocks);
 		for (auto id : reg_vehicle_ids)
 		{

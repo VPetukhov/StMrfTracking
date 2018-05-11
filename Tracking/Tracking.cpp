@@ -91,8 +91,8 @@ namespace Tracking
 
 	Mat connected_components(const Mat &labels)
 	{
-		if (labels.type() != BlockArray::cv_id_t)
-			throw std::runtime_error("Wrong image type: " + std::to_string(labels.type()));
+		if (labels.channels() != 1)
+			throw std::runtime_error("Wrong number of channels: " + std::to_string(labels.channels()));
 
 		Mat res, input;
 		labels.convertTo(input, CV_8U);
