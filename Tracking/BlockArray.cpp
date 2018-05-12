@@ -148,4 +148,9 @@ namespace Tracking
 		, x_right(right_x)
 		, direction(direction)
 	{}
+
+	BlockArray::Capture::Capture(size_t y, size_t left_x, size_t right_x, BlockArray::Line::Direction direction, CaptureType type)
+		: Line(y, left_x, right_x, direction)
+		, type(type)
+	{}
 }

@@ -9,66 +9,9 @@ using namespace cv;
 
 namespace Tracking
 {
-	BlockArray::id_t update_slit_objects(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &foreground,
-	                                     BlockArray::id_t new_block_id)
+	bool is_foreground(const BlockArray::Block &block, const Mat &foreground, double block_foreground_threshold)
 	{
-		const int d_xs[] = {0, 1, 1, 1, 0, -1, -1, -1, 0};
-		const int d_ys[] = {-1, -1, 0, 1, 1, 1, 0, -1, 0};
-		const int nds = sizeof(d_xs) / sizeof(d_xs[0]);
-
-		std::vector<BlockArray::id_t> object_ids(slit.block_xs().size(), 0);
-		for (size_t slit_block_id = 0; slit_block_id < slit.block_xs().size(); ++slit_block_id)
-		{
-			auto block_x = slit.block_xs()[slit_block_id];
-			auto &block = blocks.at(slit.block_y(), block_x);
-			if (!is_foreground(block, foreground))
-				continue;
-
-			if (block.object_id > 0)
-			{
-				object_ids.at(slit_block_id) = block.object_id;
-				continue;
-			}
-
-			BlockArray::id_t next_id = 0;
-			for (int di = 0; di < nds; ++di)
-			{
-				int new_x = block_x + d_xs[di], new_y = slit.block_y() + d_ys[di];
-				if (!blocks.valid_coords(new_y, new_x))
-					continue;
-
-				next_id = block.object_id;
-				if (next_id != 0)
-					break;
-			}
-
-			if (next_id != 0)
-			{
-				object_ids[slit_block_id] = next_id;
-				continue;
-			}
-
-			if (slit_block_id > 1 && object_ids[slit_block_id - 1] > 0)
-			{
-				object_ids[slit_block_id] = object_ids[slit_block_id - 1];
-				continue;
-			}
-
-			object_ids[slit_block_id] = new_block_id;
-			new_block_id++;
-		}
-
-		for (size_t slit_block_id = 0; slit_block_id < slit.block_xs().size(); ++slit_block_id)
-		{
-			blocks.at(slit.block_y(), slit.block_xs()[slit_block_id]).object_id = object_ids.at(slit_block_id);
-		}
-
-		return *std::max(object_ids.begin(), object_ids.end()) + 1;
-	}
-
-	bool is_foreground(const BlockArray::Block &block, const Mat &foreground)
-	{
-		return (cv::mean(foreground(block.y_coords(), block.x_coords())).val[0] / 255.0) > 0.05;
+		return (cv::mean(foreground(block.y_coords(), block.x_coords())).val[0] / 255.0) > block_foreground_threshold;
 	}
 
 	group_coords_t find_group_coordinates(const cv::Mat &labels)
@@ -161,59 +104,6 @@ namespace Tracking
 	{
 		return Point(static_cast<int>(std::round(motion_vec.x / double(block_width))),
 		             static_cast<int>(std::round(motion_vec.y / double(block_height))));
-	}
-
-	object_ids_t update_object_ids(const BlockArray &blocks, const cv::Mat &block_id_map, const std::vector<cv::Point> &motion_vecs,
-	                               const group_coords_t &group_coords, const cv::Mat &foreground, int search_rad)
-	{
-		object_ids_t res_ids(blocks.height);
-		for (auto &row : res_ids)
-		{
-			row.resize(blocks.width);
-		}
-
-		for (size_t i = 0; i < group_coords.size(); ++i)
-		{
-			auto const &gc = group_coords[i];
-			auto const &m_vec = motion_vecs[i];
-
-			for (auto const &coords : gc)
-			{
-				auto new_coords = coords + m_vec;
-				if (!blocks.valid_coords(new_coords))
-					continue;
-
-				if (!is_foreground(blocks.at(new_coords), foreground))
-					continue;
-
-				auto cur_block_id = block_id_map.at<BlockArray::id_t>(coords);
-				if (cur_block_id == 0)
-					throw std::runtime_error("Zero block id for a group");
-
-				res_ids.at(new_coords.y).at(new_coords.x).insert(cur_block_id);
-
-				for (int new_y = new_coords.y - search_rad; new_y <= new_coords.y + search_rad; ++new_y)
-				{
-					for (int new_x = new_coords.x - search_rad; new_x <= new_coords.x + search_rad; ++new_x)
-					{
-						Point cur_coords(new_x, new_y);
-						if (!blocks.valid_coords(cur_coords))
-							continue;
-
-						auto &cur_cell = res_ids.at(cur_coords.y).at(cur_coords.x);
-						if (cur_cell.find(cur_block_id) != cur_cell.end())
-							continue;
-
-						if (!is_foreground(blocks.at(cur_coords), foreground))
-							continue;
-
-						cur_cell.insert(cur_block_id);
-					}
-				}
-			}
-		}
-
-		return res_ids;
 	}
 
 	void reset_map_before_slit(object_ids_t &new_map, size_t slit_block_y, BlockArray::Line::Direction vehicle_direction,

@@ -37,6 +37,15 @@ namespace Tracking
 			Line(size_t y, size_t left_x, size_t right_x, Direction direction);
 		};
 
+		class Capture : public Line
+		{
+		public:
+			CaptureType type;
+
+		public:
+			Capture(size_t y, size_t left_x, size_t right_x, Direction direction, CaptureType type);
+		};
+
 		class Block
 		{
 		public:

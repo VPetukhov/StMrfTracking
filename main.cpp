@@ -13,6 +13,7 @@
 #include "Tracking/Tracking.h"
 #include "Tracking/Utils.h"
 #include "Tracking/NightDetection.h"
+#include "Tracking/Tracker.h"
 
 using namespace cv;
 using namespace Tracking;
@@ -27,13 +28,12 @@ struct Params
 	size_t block_width = 16;
 	size_t block_height = 20;
 	bool cant_parse = false;
-	BlockArray::CaptureType capture_type = BlockArray::CaptureType::CROSS;
 	double foreground_threshold = 0.05;
 	int frame_freq=1;
 	std::string out_dir = "";
 	int reverse_history_size=5;
 	std::string video_file = "";
-	BlockArray::Line capture = BlockArray::Line(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP);
+	BlockArray::Capture capture = BlockArray::Capture(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP, BlockArray::CaptureType::CROSS);
 	BlockArray::Line slit = BlockArray::Line(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP);
 };
 
@@ -157,6 +157,17 @@ bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Sl
 	return true;
 }
 
+Tracker get_tracker(const Params &p, const Mat &background)
+{
+	BlockArray blocks(background.rows / p.block_height, background.cols / p.block_width, p.block_height, p.block_width);
+	if (p.slit.y > background.rows - background.rows % p.block_height)
+		throw std::logic_error("Slit y is too large: " + std::to_string(p.slit.y));
+
+	BlockArray::Slit slit(p.slit, p.block_width, p.block_height);
+
+	return Tracker(p.foreground_threshold, p.background_update_weight, p.reverse_history_size, 1, 0.5, background, slit, p.capture, blocks);
+}
+
 int main(int argc, char **argv)
 {
 	Params p = parse_cmd_params(argc, argv);
@@ -187,54 +198,27 @@ int main(int argc, char **argv)
 	Mat frame;
 	read_frame(cap, frame);
 
-	show_image(background);
-
-	BlockArray blocks(background.rows / p.block_height, background.cols / p.block_width, p.block_height, p.block_width);
-//	draw_grid(frame, blocks);
-
-	if (p.slit.y > frame.rows - frame.rows % p.block_height)
-		throw std::logic_error("Slit y is too large: " + std::to_string(p.slit.y));
-
-	BlockArray::Slit slit(p.slit, p.block_width, p.block_height);
-
-//	draw_slit(frame, blocks, slit);
-//	show_image(frame);
-
 	namedWindow(WINDOW_NAME, 1);
 
 	// Loop
 	int i = 1;
 	size_t out_id = 0;
 	Mat old_frame;
-	std::deque<Mat> frames, backgrounds;
-	frames.push_back(frame.clone());
-	backgrounds.push_back(background.clone());
-
+	Tracker tracker = get_tracker(p, background);
+	tracker.add_frame(frame);
 	while (read_frame(cap, frame))
 	{
 		if (++i % p.frame_freq != 0)
 			continue;
 
-		update_background_weighted(background, frame, p.foreground_threshold, p.background_update_weight);
-
-		frames.push_back(frame.clone());
-		backgrounds.push_back(background.clone());
-
-		if (frames.size() > p.reverse_history_size)
-		{
-			frames.pop_front();
-			backgrounds.pop_front();
-		}
-
 		std::cout << "Step " << i << std::endl;
-		show_image(edge_image(frame));
 
-		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame, old_frame, background, p.foreground_threshold,
-		                                             p.capture, p.capture_type);
+		tracker.add_frame(frame);
+		auto reg_vehicle_ids = tracker.register_vehicle_step(frame, old_frame, background);
 
 //		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
 //		                                           p.capture, p.capture_type);
-		auto b_boxes = bounding_boxes(blocks);
+		auto b_boxes = bounding_boxes(tracker.blocks());
 		for (auto id : reg_vehicle_ids)
 		{
 			save_vehicle(frame, b_boxes.at(id), p.out_dir,  out_id++);
@@ -242,7 +226,7 @@ int main(int argc, char **argv)
 
 		old_frame = frame;
 
-		if (!plot_frame(frame, blocks, slit, p.capture, 30 * p.frame_freq))
+		if (!plot_frame(frame, tracker.blocks(), tracker.slit, tracker.capture, 30 * p.frame_freq))
 			break;
 	}
 

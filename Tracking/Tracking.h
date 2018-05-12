@@ -21,11 +21,6 @@ namespace Tracking
 
 	void refine_background(cv::Mat &background, const std::vector<cv::Mat> &frames, double weight, size_t max_iters=3);
 	void update_background_weighted(cv::Mat &background, const cv::Mat &frame, double threshold, double weight);
-	id_set_t reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<cv::Mat> &frames,
-	                             const std::deque<cv::Mat> &backgrounds, double foreground_threshold,
-	                             const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
-	void segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
-	                       const cv::Mat &old_frame, const cv::Mat &foreground, int search_rad=5);
 	bool read_frame(cv::VideoCapture &reader, cv::Mat &frame, int height=480, int width=600);
 
 	cv::Mat connected_components(const cv::Mat &labels);
@@ -37,11 +32,7 @@ namespace Tracking
 	                    double min_s = 0.05, double min_h = 0.45);
 
 	rect_map_t bounding_boxes(const BlockArray &blocks);
-	id_set_t register_vehicle_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
-	                               const cv::Mat &old_frame, const cv::Mat &background, double foreground_threshold,
-	                               const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
-	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Line &capture,
-	                          BlockArray::CaptureType capture_type);
-	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
+	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Capture &capture);
+	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Capture &capture);
 }
 
