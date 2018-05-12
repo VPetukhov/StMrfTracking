@@ -31,7 +31,7 @@ namespace Tracking
 	cv::Mat connected_components(const cv::Mat &labels);
 	cv::Mat edge_image(const cv::Mat &image);
 
-	bool is_night(const cv::Mat &img, double threshold_red = 0.75, double threshold_bright = 0.35);
+	bool is_night(const cv::Mat &img, double threshold_red = 0.75, double threshold_bright = 0.15);
 	void hsv_channels(const cv::Mat &img, cv::Mat* hsv);
 	cv::Mat shadow_mask(const cv::Mat &frame, const cv::Mat &background, double min_ratio = 0.1, double max_ratio = 0.5,
 	                    double min_s = 0.05, double min_h = 0.45);

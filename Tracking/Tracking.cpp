@@ -350,7 +350,7 @@ namespace Tracking
 		double bright_frac = mean(hsv[2] > 150).val[0] / 255.0;
 
 //	std::cout << red_frac << " " << bright_frac << std::endl;
-		return (red_frac > threshold_red) | (bright_frac > threshold_bright);
+		return (red_frac > threshold_red) && (bright_frac < threshold_bright);
 	}
 
 	id_set_t register_vehicle_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
