@@ -136,7 +136,7 @@ void draw_slit(Mat& img, const BlockArray &blocks, const BlockArray::Slit &slit,
 
 bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Slit &slit, const BlockArray::Line &capture, int delay=30)
 {
-	auto plot_map = blocks.pixel_object_map();
+//	auto plot_map = blocks.pixel_object_map();
 	Mat plot_img = frame.clone();
 //	Mat plot_img = heatmap(plot_map);
 
@@ -225,11 +225,11 @@ int main(int argc, char **argv)
 
 		std::cout << "Step " << i << std::endl;
 
-		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame, old_frame, background, p.foreground_threshold,
-		                                             p.capture, p.capture_type);
+//		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame, old_frame, background, p.foreground_threshold,
+//		                                             p.capture, p.capture_type);
 
-//		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
-//		                                           p.capture, p.capture_type);
+		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
+		                                           p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(blocks);
 		for (auto id : reg_vehicle_ids)
 		{

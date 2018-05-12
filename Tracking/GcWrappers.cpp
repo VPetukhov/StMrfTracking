@@ -14,7 +14,16 @@ namespace Tracking
 		return -static_cast<int>(std::round(mult * std::log10(prob + 1e-20)));
 	}
 
-	gco_ptr_t gc_optimization_8_grid_graph(int width, int height, int n_labels)
+	void set_neighbors(const std::shared_ptr<GCoptimizationGeneralGraph> &gco, int row1, int col1, int row2, int col2,
+	                   int width, const cv::Mat &mask)
+	{
+		if (mask.at<BlockArray::id_t>(row1, col1) == 0 || mask.at<BlockArray::id_t>(row2, col2) == 0)
+			return;
+
+		gco->setNeighbors(id_by_coords(row1, col1, width), id_by_coords(row2, col2, width));
+	}
+
+	gco_ptr_t gc_optimization_8_grid_graph(int width, int height, int n_labels, const cv::Mat &mask)
 	{
 		auto gco = std::make_shared<GCoptimizationGeneralGraph>(height * width, n_labels);
 
@@ -22,10 +31,10 @@ namespace Tracking
 		{
 			for (int col = 0; col < (width - 1); ++col)
 			{
-				gco->setNeighbors(id_by_coords(row, col, width), id_by_coords(row + 1, col, width));
-				gco->setNeighbors(id_by_coords(row, col, width), id_by_coords(row, col + 1, width));
-				gco->setNeighbors(id_by_coords(row, col, width), id_by_coords(row + 1, col + 1, width));
-				gco->setNeighbors(id_by_coords(row + 1, col, width), id_by_coords(row, col + 1, width));
+				set_neighbors(gco, row, col, row + 1, col, width, mask);
+				set_neighbors(gco, row, col, row, col + 1, width, mask);
+				set_neighbors(gco, row, col, row + 1, col + 1, width, mask);
+				set_neighbors(gco, row + 1, col, row, col + 1, width, mask);
 			}
 		}
 

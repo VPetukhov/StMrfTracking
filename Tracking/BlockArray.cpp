@@ -70,11 +70,12 @@ namespace Tracking
 		if (object_ids.type() != BlockArray::cv_id_t)
 			throw std::logic_error("Wrong type of object ids: " + std::to_string(object_ids.type()));
 
+		size_t block_ind = 0;
 		for (size_t row = 0; row < this->height; ++row)
 		{
 			for (size_t col = 0; col < this->width; ++col)
 			{
-				this->at(row, col).object_id = object_ids.at<id_t>(row, col);
+				this->_blocks[block_ind++].object_id = object_ids.at<id_t>(row, col);
 			}
 		}
 	}

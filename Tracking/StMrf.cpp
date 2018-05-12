@@ -276,77 +276,9 @@ namespace Tracking
 		auto group_coords = find_group_coordinates(object_id_map, object_ids);
 		auto data_cost = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
 		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame);
-//		auto data_cost_img = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
-//		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame, 1e3, 1e3, true, false);
-//		auto data_cost_lab = unary_penalties(blocks, std::vector<BlockArray::id_t>(object_ids.begin(), object_ids.end()),
-//		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame, 1e3, 1e3, false, true);
-//
-//		for (size_t label = 0; label < data_cost.cols; ++label)
-//		{
-//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
-//			for (size_t row = 0; row < blocks.height; ++row)
-//			{
-//				for (size_t col = 0; col < blocks.width; ++col)
-//				{
-//					res.at<id_t>(row, col) = data_cost.at<int>(id_by_coords(row, col, blocks.width), label);
-//				}
-//			}
-//
-//			std::cout << res.at<id_t>(14, 4) << " ";
-//		}
-//		std::cout << std::endl;
-//		for (size_t label = 0; label < data_cost.cols; ++label)
-//		{
-//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
-//			for (size_t row = 0; row < blocks.height; ++row)
-//			{
-//				for (size_t col = 0; col < blocks.width; ++col)
-//				{
-//					res.at<id_t>(row, col) = data_cost_img.at<int>(id_by_coords(row, col, blocks.width), label);
-//				}
-//			}
-//
-//			std::cout << res.at<id_t>(14, 4) << " ";
-//		}
-//		std::cout << std::endl;
-//		for (size_t label = 0; label < data_cost.cols; ++label)
-//		{
-//			Mat res = Mat::zeros(blocks.height, blocks.width, BlockArray::cv_id_t);
-//			for (size_t row = 0; row < blocks.height; ++row)
-//			{
-//				for (size_t col = 0; col < blocks.width; ++col)
-//				{
-//					res.at<id_t>(row, col) = data_cost_lab.at<int>(id_by_coords(row, col, blocks.width), label);
-//				}
-//			}
-//
-//			std::cout << res.at<id_t>(14, 4) << " ";
-//		}
-//		std::cout << std::endl;
 
-//		for (size_t row = 0; row < blocks.height; ++row)
-//		{
-//			for (size_t col = 0; col < blocks.width; ++col)
-//			{
-//				bool has_label = false;
-//				for (size_t label = 0; label < data_cost.cols; ++label)
-//				{
-//					auto id = id_by_coords(row, col, blocks.width);
-//					if (data_cost.at<id_t>(id, label) < 500000)
-//					{
-//						if (has_label)
-//						{
-//							std::cout << row << ": " << data_cost(Range(id, id + 1), Range::all()) << std::endl;
-//							has_label = false;
-//						}
-//						has_label = true;
-//					}
-//				}
-//			}
-//		}
-
-//		auto gco = gc_optimization_8_grid_graph(blocks.width, blocks.height, data_cost.cols);
-		auto gco = std::shared_ptr<GCoptimization>(new GCoptimizationGridGraph(blocks.width, blocks.height, data_cost.cols));
+		auto gco = gc_optimization_8_grid_graph(blocks.width, blocks.height, data_cost.cols, blocks.object_map());
+//		auto gco = std::shared_ptr<GCoptimization>(new GCoptimizationGridGraph(blocks.width, blocks.height, data_cost.cols));
 		set_data_cost(gco, data_cost);
 		set_smooth_cost(gco, 1); // TODO: set to 20
 		gco->expansion();
