@@ -180,11 +180,14 @@ int main(int argc, char **argv)
 
 	Mat background;
 //	Mat back_in = imread("./bacgkround_night.jpg");
-	Mat back_in = imread("./bacgkround_d2.jpg");
+	Mat back_in = imread("./bacgkround.jpg");
+//	Mat back_in = imread("./bacgkround_d2.jpg");
 	back_in.convertTo(background, DataType<float>::type, 1 / 255.0);
 
 	Mat frame;
 	read_frame(cap, frame);
+
+	show_image(background);
 
 	BlockArray blocks(background.rows / p.block_height, background.cols / p.block_width, p.block_height, p.block_width);
 //	draw_grid(frame, blocks);
@@ -224,12 +227,13 @@ int main(int argc, char **argv)
 		}
 
 		std::cout << "Step " << i << std::endl;
+		show_image(edge_image(frame));
 
-//		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame, old_frame, background, p.foreground_threshold,
-//		                                             p.capture, p.capture_type);
+		auto reg_vehicle_ids = register_vehicle_step(blocks, slit, frame, old_frame, background, p.foreground_threshold,
+		                                             p.capture, p.capture_type);
 
-		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
-		                                           p.capture, p.capture_type);
+//		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
+//		                                           p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(blocks);
 		for (auto id : reg_vehicle_ids)
 		{

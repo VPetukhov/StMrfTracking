@@ -191,7 +191,7 @@ namespace Tracking
 		Mat input;
 		if (image.channels() != 1)
 		{
-			cvtColor(image, input, CV_BGR2GRAY);
+			cvtColor(image, input, CV_RGB2GRAY);
 		}
 		else
 		{
@@ -224,9 +224,21 @@ namespace Tracking
 		return res;
 	}
 
-	cv::Mat interlayer_feedback(const cv::Mat &frame, const cv::Mat &labels)
+	cv::Mat interlayer_feedback(BlockArray &blocks, const cv::Mat &frame, double edge_threshold=0.5)
 	{
-
+		Mat edges = edge_image(frame);
+		for (size_t col_id = 0; col_id < blocks.width; ++col_id)
+		{
+			for (size_t row_id = 0; row_id < blocks.height; ++row_id)
+			{
+				auto &block = blocks.at(row_id, col_id);
+				double edge_frac = mean(edges(block.y_coords(), block.x_coords())).val[0];
+				if (edge_frac > edge_threshold)
+				{
+					// TODO: new id for this row?
+				}
+			}
+		}
 	}
 
 	rect_map_t bounding_boxes(const BlockArray &blocks)
