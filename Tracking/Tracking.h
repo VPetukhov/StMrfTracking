@@ -25,13 +25,16 @@ namespace Tracking
 	                             const std::deque<cv::Mat> &backgrounds, double foreground_threshold,
 	                             const BlockArray::Line &capture, BlockArray::CaptureType capture_type);
 	void segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,
-	                       const cv::Mat &old_frame, const cv::Mat &foreground);
+	                       const cv::Mat &old_frame, const cv::Mat &foreground, int search_rad=5);
 	bool read_frame(cv::VideoCapture &reader, cv::Mat &frame, int height=480, int width=600);
 
 	cv::Mat connected_components(const cv::Mat &labels);
 	cv::Mat edge_image(const cv::Mat &image);
 
 	bool is_night(const cv::Mat &img, double threshold_red = 0.75, double threshold_bright = 0.35);
+	void hsv_channels(const cv::Mat &img, cv::Mat* hsv);
+	cv::Mat shadow_mask(const cv::Mat &frame, const cv::Mat &background, double min_ratio = 0.1, double max_ratio = 0.5,
+	                    double min_s = 0.05, double min_h = 0.45);
 
 	rect_map_t bounding_boxes(const BlockArray &blocks);
 	id_set_t register_vehicle_step(BlockArray &blocks, const BlockArray::Slit &slit, const cv::Mat &frame,

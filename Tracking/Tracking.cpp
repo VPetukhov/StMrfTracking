@@ -23,7 +23,7 @@ namespace Tracking
 	Mat estimate_background(const std::string &video_file, size_t max_n_frames, double weight, size_t refine_iter_num)
 	{
 		VideoCapture cap(video_file);
-		if(!cap.isOpened())  // check if we succeeded
+		if (!cap.isOpened())  // check if we succeeded
 			throw std::runtime_error("Can't open video: " + video_file);
 
 		Mat frame;
@@ -126,7 +126,7 @@ namespace Tracking
 
 	id_set_t reverse_st_mrf_step(BlockArray &blocks, const BlockArray::Slit &slit, const std::deque<Mat> &frames,
 	                             const std::deque<Mat> &backgrounds, double foreground_threshold,
-		                         const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
+	                             const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
 	{
 		if (frames.empty())
 			throw std::runtime_error("Empty frames");
@@ -134,19 +134,21 @@ namespace Tracking
 		id_set_t ids;
 		for (long i = frames.size() - 2; i >= 0; --i)
 		{
-			ids = register_vehicle_step(blocks, slit, frames[i], frames[i + 1], backgrounds[i], foreground_threshold, capture, capture_type);
+			ids = register_vehicle_step(blocks, slit, frames[i], frames[i + 1], backgrounds[i], foreground_threshold,
+			                            capture, capture_type);
 		}
 
 		for (size_t i = 1; i < frames.size(); ++i)
 		{
-			ids = register_vehicle_step(blocks, slit, frames[i], frames[i - 1], backgrounds[i], foreground_threshold, capture, capture_type);
+			ids = register_vehicle_step(blocks, slit, frames[i], frames[i - 1], backgrounds[i], foreground_threshold,
+			                            capture, capture_type);
 		}
 
 		return ids;
 	}
 
 	void segmentation_step(BlockArray &blocks, const BlockArray::Slit &slit, const Mat &frame,
-	                       const Mat &old_frame, const Mat &foreground)
+	                       const Mat &old_frame, const Mat &foreground, int search_rad)
 	{
 		auto const prev_pixel_map = blocks.pixel_object_map();
 		auto const object_map = blocks.object_map();
@@ -155,8 +157,11 @@ namespace Tracking
 		std::vector<Point> motion_vectors;
 		for (auto const &coords : group_coords)
 		{
-			motion_vectors.push_back(find_motion_vector(blocks, frame, old_frame, coords));
+			auto mv = find_motion_vector(blocks, frame, old_frame, coords, search_rad);
+			motion_vectors.push_back(mv);
+//			std::cout << mv << " ";
 		}
+//		std::cout << std::endl;
 
 		Mat labels = Mat::zeros(object_map.size(), BlockArray::cv_id_t);
 		if (!motion_vectors.empty())
@@ -167,7 +172,8 @@ namespace Tracking
 				motion_vectors_rounded.push_back(round_motion_vector(vec, blocks.block_width, blocks.block_height));
 			}
 
-			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords, foreground);
+			auto possible_object_ids = update_object_ids(blocks, object_map, motion_vectors_rounded, group_coords,
+			                                             foreground, search_rad);
 
 			reset_map_before_slit(possible_object_ids, slit.block_y(), slit.direction(), blocks);
 			labels = label_map_gco(blocks, possible_object_ids, motion_vectors, prev_pixel_map, frame, old_frame);
@@ -243,8 +249,8 @@ namespace Tracking
 				auto const &bb = bb_it->second;
 				bb_it->second.y = std::min(bb.y, static_cast<int>(block.start_y));
 				bb_it->second.x = std::min(bb.x, static_cast<int>(block.start_x));
-				bb_it->second.height = std::max(bb.height, static_cast<int>(block.end_y - bb.y + 1));
-				bb_it->second.width = std::max(bb.width, static_cast<int>(block.end_x - bb.x + 1));
+				bb_it->second.height = std::max(bb.height, static_cast<int>(block.end_y - bb.y));
+				bb_it->second.width = std::max(bb.width, static_cast<int>(block.end_x - bb.x));
 			}
 		}
 
@@ -283,7 +289,8 @@ namespace Tracking
 		return res;
 	}
 
-	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
+	id_set_t
+	active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Line &capture, BlockArray::CaptureType capture_type)
 	{
 		id_set_t res;
 		for (auto const &rect_it : b_boxes)
@@ -308,7 +315,7 @@ namespace Tracking
 		return res;
 	}
 
-	bool is_night(const Mat &img, double threshold_red, double threshold_bright)
+	void hsv_channels(const Mat &img, Mat *hsv)
 	{
 		Mat inp = img.clone();
 		if (img.type() == CV_32FC3 || img.type() == CV_64FC3)
@@ -317,9 +324,15 @@ namespace Tracking
 			inp.convertTo(inp, CV_8UC1);
 		}
 
-		Mat hsv_img, hsv[3];
+		Mat hsv_img;
 		cvtColor(inp, hsv_img, COLOR_RGB2HSV);
 		split(hsv_img, hsv);
+	}
+
+	bool is_night(const Mat &img, double threshold_red, double threshold_bright)
+	{
+		Mat hsv[3];
+		hsv_channels(img, hsv);
 
 		double red_frac = mean(hsv[0] < 0.2 * 255 | hsv[0] > 0.8 * 255).val[0] / 255.0;
 		double bright_frac = mean(hsv[2] > 150).val[0] / 255.0;
@@ -339,13 +352,14 @@ namespace Tracking
 		auto vehicle_ids = active_vehicle_ids(b_boxes_prev, capture, capture_type);
 
 		Mat foreground;
+		foreground = subtract_background(frame, background, foreground_threshold);
 		if (is_night(frame))
 		{
-			foreground = detect_headlights(frame);
+			foreground = min(foreground, detect_headlights(frame));
 		}
 		else
 		{
-			foreground = subtract_background(frame, background, foreground_threshold);
+			foreground = min(foreground, 255 - shadow_mask(frame, background));
 		}
 
 		segmentation_step(blocks, slit, frame, old_frame, foreground);
@@ -370,5 +384,22 @@ namespace Tracking
 #endif
 
 		return registered_ids;
+	}
+
+
+	Mat shadow_mask(const Mat &frame, const Mat &background, double min_ratio, double max_ratio, double min_s, double min_h)
+	{
+		Mat hsv_frame[3], hsv_background[3];
+		hsv_channels(frame, hsv_frame);
+		hsv_channels(background, hsv_background);
+		hsv_frame[2].convertTo(hsv_frame[2], DataType<double>::type);
+		hsv_background[2].convertTo(hsv_background[2], DataType<double>::type);
+
+		Mat h_mask = abs(hsv_frame[0] - hsv_background[0]) >= (min_h * 255);
+		Mat s_mask = (hsv_frame[1] - hsv_background[1]) >= (min_s * 255);
+		Mat v_ratio = hsv_frame[2] / hsv_background[2];
+		Mat v_mask = (min_ratio <= v_ratio) & (v_ratio <= max_ratio);
+
+		return h_mask & s_mask & v_mask;
 	}
 }

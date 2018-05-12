@@ -23,6 +23,7 @@ static const size_t NA_VALUE = std::numeric_limits<size_t>::max();
 
 struct Params
 {
+	double background_update_weight = 0.05;
 	size_t block_width = 16;
 	size_t block_height = 20;
 	bool cant_parse = false;
@@ -44,10 +45,10 @@ static void usage()
 	          << "SYNOPSIS\n"
 	          << "\t" << SCRIPT_NAME << " [options] -o out_dir slit_y slit_x_left slit_x_right capture_y capture_x_left capture_x_right video_file\n"
 	          << "OPTIONS:\n"
-	          << "\t-h, --block-height: height of each block. Default: " << Params().block_height << "\n"
-	          << "\t-w, --block-width: width of each block. Default: " << Params().block_width << "\n"
-	          << "\t-t, --foreground-threshold: Threshold, used to distinguish background from foreground. Default: " << Params().foreground_threshold << "\n"
-	          << "\t-o, --output-dir: Output directory. Default: " << Params().out_dir << "\n";
+	          << "\t-h height, --block-height: height of each block. Default: " << Params().block_height << "\n"
+	          << "\t-w width, --block-width: width of each block. Default: " << Params().block_width << "\n"
+	          << "\t-t threshold, --foreground-threshold: Threshold, used to distinguish background from foreground. Default: " << Params().foreground_threshold << "\n"
+	          << "\t-o dir, --output-dir: Output directory. Default: " << Params().out_dir << "\n";
 }
 
 static Params parse_cmd_params(int argc, char **argv)
@@ -62,7 +63,7 @@ static Params parse_cmd_params(int argc, char **argv)
 			{"foreground-threshold", required_argument, nullptr, 't'},
 			{nullptr, 0, nullptr, 0}
 	};
-	while ((c = getopt_long(argc, argv, "y:l:r:h:o:w:t:", long_options, &option_index)) != -1)
+	while ((c = getopt_long(argc, argv, "h:w:t:o:", long_options, &option_index)) != -1)
 	{
 		switch (c)
 		{
@@ -105,6 +106,12 @@ static Params parse_cmd_params(int argc, char **argv)
 	params.capture.x_left = strtol(argv[optind++], nullptr, 10);
 	params.capture.x_right = strtol(argv[optind++], nullptr, 10);
 	params.video_file = argv[optind++];
+
+	if (params.slit.y < params.capture.y)
+	{
+		params.slit.direction = BlockArray::Line::DOWN;
+		params.capture.direction = BlockArray::Line::DOWN;
+	}
 
 	return params;
 }
@@ -166,18 +173,14 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-//	Mat img = imread("/home/viktor/tmp/test.jpg");
-//	show_image(img);
-//	show_image(detect_headlights(img));
-//	return 0;
-
-//	Mat background = estimate_background(p.video_file, 300, 0.05, 3);
-//
+//	Mat background = estimate_background(p.video_file, 300, p.background_update_weight, 3);
 //	Mat back_out;
 //	background.convertTo(back_out, DataType<int>::type, 255);
-//	imwrite("./bacgkround_night.jpg", back_out);
-	Mat back_in = imread("./bacgkround_night.jpg");
+//	imwrite("./bacgkround_d2.jpg", back_out);
+
 	Mat background;
+//	Mat back_in = imread("./bacgkround_night.jpg");
+	Mat back_in = imread("./bacgkround_d2.jpg");
 	back_in.convertTo(background, DataType<float>::type, 1 / 255.0);
 
 	Mat frame;
@@ -208,6 +211,8 @@ int main(int argc, char **argv)
 	{
 		if (++i % p.frame_freq != 0)
 			continue;
+
+		update_background_weighted(background, frame, p.foreground_threshold, p.background_update_weight);
 
 		frames.push_back(frame.clone());
 		backgrounds.push_back(background.clone());
