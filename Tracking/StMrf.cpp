@@ -168,15 +168,13 @@ namespace Tracking
 		                                 motion_vectors, group_coords, prev_pixel_map, frame, prev_frame);
 
 		auto gco = gc_optimization_8_grid_graph(blocks.width, blocks.height, data_cost.cols, blocks.object_map());
-//		auto gco = std::shared_ptr<GCoptimization>(new GCoptimizationGridGraph(blocks.width, blocks.height, data_cost.cols));
 		set_data_cost(gco, data_cost);
-		set_smooth_cost(gco, 1); // TODO: set to 20
+		set_smooth_cost(gco, data_cost.cols, 20);
 		gco->expansion();
 
 		auto labels = gco_to_label_map(gco, blocks.height, blocks.width);
 		double min_val, max_val;
 		cv::minMaxLoc(labels, &min_val, &max_val);
-//		std::cout << min_val << " " << max_val << std::endl;
 
 		return labels;
 	}

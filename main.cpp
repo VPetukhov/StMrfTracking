@@ -136,9 +136,7 @@ void draw_slit(Mat& img, const BlockArray &blocks, const BlockArray::Slit &slit,
 
 bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Slit &slit, const BlockArray::Line &capture, int delay=30)
 {
-//	auto plot_map = blocks.pixel_object_map();
 	Mat plot_img = frame.clone();
-//	Mat plot_img = heatmap(plot_map);
 
 	for (auto const &bb : bounding_boxes(blocks))
 	{
@@ -152,8 +150,6 @@ bool plot_frame(const Mat &frame, const BlockArray &blocks, const BlockArray::Sl
 	if(waitKey(delay) >= 0)
 		return false;
 
-//	show_image(heatmap(plot_map));
-//	show_image(heatmap(blocks.object_map()));
 	return true;
 }
 
@@ -215,8 +211,7 @@ int main(int argc, char **argv) // TODO: stop interlayer before slit
 
 		tracker.add_frame(frame);
 		auto reg_vehicle_ids = tracker.register_vehicle_step(frame, old_frame, background);
-//		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
-//		                                           p.capture, p.capture_type);
+//		auto reg_vehicle_ids = tracker.reverse_st_mrf_step();
 		auto b_boxes = bounding_boxes(tracker.blocks());
 		for (auto id : reg_vehicle_ids)
 		{
@@ -226,9 +221,6 @@ int main(int argc, char **argv) // TODO: stop interlayer before slit
 		old_frame = frame;
 		if (!plot_frame(frame, tracker.blocks(), tracker.slit, tracker.capture, 30 * p.frame_freq))
 			break;
-
-//		show_image(heatmap(tracker.blocks().object_map()));
-//		show_image(heatmap(tracker.blocks().object_map()), 0, "IF");
 	}
 
 	return 0;
@@ -238,7 +230,6 @@ void save_vehicle(const Mat &img, const Rect &b_box, const std::string &path, si
 {
 	Mat out_img = Mat(img, b_box) * 255;
 	out_img.convertTo(out_img, CV_8UC3);
-//	show_image(out_img);
 
 	auto out_filename = path + "/v" + std::to_string(img_id) + ".png";
 	if (!imwrite(out_filename, out_img))

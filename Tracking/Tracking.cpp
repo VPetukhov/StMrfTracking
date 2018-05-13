@@ -3,8 +3,6 @@
 #include "StMrf.h"
 #include "NightDetection.h"
 
-//#define DEBUG
-
 using namespace cv;
 
 namespace Tracking
@@ -23,7 +21,7 @@ namespace Tracking
 	Mat estimate_background(const std::string &video_file, size_t max_n_frames, double weight, size_t refine_iter_num)
 	{
 		VideoCapture cap(video_file);
-		if (!cap.isOpened())  // check if we succeeded
+		if (!cap.isOpened())
 			throw std::runtime_error("Can't open video: " + video_file);
 
 		Mat frame;
@@ -269,7 +267,6 @@ namespace Tracking
 		double red_frac = mean(hsv[0] < 0.2 * 255 | hsv[0] > 0.8 * 255).val[0] / 255.0;
 		double bright_frac = mean(hsv[2] > 150).val[0] / 255.0;
 
-//	std::cout << red_frac << " " << bright_frac << std::endl;
 		return (red_frac > threshold_red) && (bright_frac < threshold_bright);
 	}
 
