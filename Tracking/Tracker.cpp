@@ -9,7 +9,9 @@ namespace Tracking
 {
 
 	Tracker::Tracker(double foreground_threshold, double background_update_weight, int reverse_history_size,
-	                 int search_radius, double block_foreground_threshold, const Mat &background, const BlockArray::Slit &slit,
+	                 int search_radius, double block_foreground_threshold,
+	                 double edge_threshold, double edge_brightness_threshold, double interval_threshold, int min_edge_hamming_dist,
+	                 const Mat &background, const BlockArray::Slit &slit,
 	                 const BlockArray::Capture &capture, const BlockArray &blocks)
 		: slit(slit)
 		, capture(capture)
@@ -18,6 +20,10 @@ namespace Tracking
 		, reverse_history_size(reverse_history_size)
 		, search_radius(search_radius)
 		, block_foreground_threshold(block_foreground_threshold)
+		, edge_threshold(edge_threshold)
+		, edge_brightness_threshold(edge_brightness_threshold)
+		, interval_threshold(interval_threshold)
+		, min_edge_hamming_dist(min_edge_hamming_dist)
 		, _background(background.clone())
 		, _blocks(blocks)
 	{}
@@ -65,7 +71,8 @@ namespace Tracking
 			foreground = min(foreground, 255 - shadow_mask(frame, background));
 		}
 
-		this->segmentation_step(frame, prev_frame, foreground);
+		auto next_label_id = this->segmentation_step(frame, prev_frame, foreground);
+		this->interlayer_feedback(frame, next_label_id);
 		auto b_boxes = bounding_boxes(this->_blocks);
 		return register_vehicle(b_boxes, vehicle_ids, this->capture);
 	}
@@ -89,7 +96,98 @@ namespace Tracking
 		return ids;
 	}
 
-	void Tracker::segmentation_step(const Mat &frame, const Mat &old_frame, const Mat &foreground)
+	std::vector<bool> Tracker::column_edge_line(const cv::Mat &edges, size_t column_id) const
+	{
+		std::vector<bool> line(this->_blocks.height);
+		for (size_t row_id = 0; row_id < this->_blocks.height; ++row_id)
+		{
+			auto &block = this->_blocks.at(row_id, column_id);
+			Mat reduced_col;
+			reduce(edges(block.y_coords(), block.x_coords()), reduced_col, 1, CV_REDUCE_MAX);
+			double edge_frac = mean(reduced_col).val[0] / 255.0;
+			line[row_id] = (edge_frac > this->edge_threshold);
+		}
+
+		return line;
+	}
+
+	Tracker::Interval Tracker::longest_distant_interval(const std::vector<bool> &cur_line,
+	                                                    const std::vector<bool> &prev_line, size_t column_id) const
+	{
+		if (cur_line.size() != prev_line.size() || prev_line.size() != this->_blocks.height)
+			throw std::runtime_error("Lines must have equal size");
+
+		Interval cur_interval, max_interval;
+		for (size_t row_id = 0; row_id < this->_blocks.height; ++row_id)
+		{
+			auto &block = this->_blocks.at(row_id, column_id);
+			bool new_id = block.object_id != cur_interval.object_id;
+			if (new_id || cur_line.at(row_id) == prev_line.at(row_id))
+			{
+				if (cur_interval.length > max_interval.length)
+				{
+					max_interval = cur_interval;
+				}
+
+				cur_interval = Interval(row_id, 0, new_id ? 0 : cur_interval.const_obj_length, block.object_id);
+			}
+
+			if (block.object_id != 0)
+			{
+				cur_interval.const_obj_length++;
+				if (cur_line.at(row_id) != prev_line.at(row_id))
+				{
+					cur_interval.length++;
+				}
+			}
+		}
+
+		return max_interval;
+	}
+
+	void Tracker::interlayer_feedback(const cv::Mat &frame, BlockArray::id_t new_id)
+	{
+		std::map<int, int> hamming_per_id, id_height;
+		Mat edges = edge_image(frame) > this->edge_brightness_threshold;
+
+		std::vector<BlockArray::id_t> new_ids(this->_blocks.height, 0);
+		auto prev_line = this->column_edge_line(edges, 0);
+		for (size_t col_id = 1; col_id < this->_blocks.width - 1; ++col_id)
+		{
+			auto cur_line = this->column_edge_line(edges, col_id);
+			auto interval = this->longest_distant_interval(cur_line, prev_line, col_id);
+			prev_line = cur_line;
+
+			if (interval.object_id != 0 &&
+				static_cast<double>(interval.length) / interval.const_obj_length > this->interval_threshold &&
+				interval.length >= this->min_edge_hamming_dist)
+			{
+				for (int row_id = interval.start_id; row_id < interval.start_id+ interval.length; ++row_id)
+				{
+					new_ids.at(row_id) = new_id;
+				}
+
+				new_id++;
+			}
+
+			for (size_t row_id = 0; row_id < this->_blocks.height; ++row_id)
+			{
+				auto &block = this->_blocks.at(row_id, col_id);
+				auto cur_new_id = new_ids.at(row_id);
+				if (cur_new_id == 0)
+					continue;
+
+				if (block.object_id != this->_blocks.at(row_id, col_id + 1).object_id)
+				{
+					new_ids[row_id] = 0;
+				}
+
+				block.object_id = cur_new_id;
+			}
+		}
+	}
+
+	BlockArray::id_t Tracker::segmentation_step(const Mat &frame, const Mat &old_frame, const Mat &foreground)
 	{
 		auto const prev_pixel_map = this->_blocks.pixel_object_map();
 		auto const object_map = this->_blocks.object_map();
@@ -100,9 +198,7 @@ namespace Tracking
 		{
 			auto mv = find_motion_vector(this->_blocks, frame, old_frame, coords, this->search_radius);
 			motion_vectors.push_back(mv);
-//			std::cout << mv << " ";
 		}
-//		std::cout << std::endl;
 
 		Mat labels = Mat::zeros(object_map.size(), BlockArray::cv_id_t);
 		if (!motion_vectors.empty())
@@ -123,7 +219,7 @@ namespace Tracking
 		minMaxLoc(labels, nullptr, &max_lab);
 
 		this->_blocks.set_object_ids(labels);
-		this->update_slit_objects(foreground, static_cast<BlockArray::id_t>(max_lab) + 1);
+		return this->update_slit_objects(foreground, static_cast<BlockArray::id_t>(max_lab) + 1);
 	}
 
 	object_ids_t Tracker::update_object_ids(const cv::Mat &block_id_map, const std::vector<cv::Point> &motion_vecs,

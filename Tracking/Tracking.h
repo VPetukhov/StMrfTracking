@@ -31,9 +31,6 @@ namespace Tracking
 	cv::Mat shadow_mask(const cv::Mat &frame, const cv::Mat &background, double min_ratio = 0.1, double max_ratio = 0.5,
 	                    double min_s = 0.05, double min_h = 0.45);
 
-	void interlayer_feedback(BlockArray &blocks, const cv::Mat &frame, BlockArray::id_t new_id,
-	                         double edge_threshold=0.5, double interval_threshold=0.5);
-
 	rect_map_t bounding_boxes(const BlockArray &blocks);
 	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Capture &capture);
 	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Capture &capture);
