@@ -168,7 +168,7 @@ Tracker get_tracker(const Params &p, const Mat &background)
 	return Tracker(p.foreground_threshold, p.background_update_weight, p.reverse_history_size, 1, 0.5, background, slit, p.capture, blocks);
 }
 
-int main(int argc, char **argv)
+int main(int argc, char **argv) // TODO: stop interlayer before slit
 {
 	Params p = parse_cmd_params(argc, argv);
 	if (p.cant_parse)
@@ -184,16 +184,16 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-//	Mat background = estimate_background(p.video_file, 300, p.background_update_weight, 3);
+	Mat background = estimate_background(p.video_file, 300, p.background_update_weight, 3);
 //	Mat back_out;
 //	background.convertTo(back_out, DataType<int>::type, 255);
 //	imwrite("./bacgkround_d2.jpg", back_out);
 
-	Mat background;
+//	Mat background;
 //	Mat back_in = imread("./bacgkround_night.jpg");
-	Mat back_in = imread("./bacgkround.jpg");
+//	Mat back_in = imread("./bacgkround.jpg");
 //	Mat back_in = imread("./bacgkround_d2.jpg");
-	back_in.convertTo(background, DataType<float>::type, 1 / 255.0);
+//	back_in.convertTo(background, DataType<float>::type, 1 / 255.0);
 
 	Mat frame;
 	read_frame(cap, frame);
@@ -215,7 +215,6 @@ int main(int argc, char **argv)
 
 		tracker.add_frame(frame);
 		auto reg_vehicle_ids = tracker.register_vehicle_step(frame, old_frame, background);
-
 //		auto reg_vehicle_ids = reverse_st_mrf_step(blocks, slit, frames, backgrounds, p.foreground_threshold,
 //		                                           p.capture, p.capture_type);
 		auto b_boxes = bounding_boxes(tracker.blocks());
@@ -225,9 +224,12 @@ int main(int argc, char **argv)
 		}
 
 		old_frame = frame;
-
 		if (!plot_frame(frame, tracker.blocks(), tracker.slit, tracker.capture, 30 * p.frame_freq))
 			break;
+
+//		show_image(heatmap(tracker.blocks().object_map()));
+		interlayer_feedback(tracker.blocks(), frame, 1000);
+//		show_image(heatmap(tracker.blocks().object_map()), 0, "IF");
 	}
 
 	return 0;

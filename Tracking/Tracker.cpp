@@ -41,6 +41,11 @@ namespace Tracking
 		return this->_blocks;
 	}
 
+	BlockArray &Tracker::blocks()
+	{
+		return this->_blocks;
+	}
+
 	id_set_t Tracker::register_vehicle_step(const cv::Mat &frame, const cv::Mat &prev_frame, const cv::Mat &background)
 	{
 		auto labels = connected_components(this->_blocks.object_map());

@@ -35,6 +35,7 @@ namespace Tracking
 		id_set_t reverse_st_mrf_step();
 
 		const BlockArray& blocks() const;
+		BlockArray& blocks();
 
 	private:
 		void segmentation_step(const cv::Mat &frame, const cv::Mat &old_frame, const cv::Mat &foreground);
