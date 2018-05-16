@@ -54,8 +54,6 @@ namespace Tracking
 				min_v = std::min(cost, min_v);
 			}
 		}
-
-//		std::cout << costs.cols << ": " << min_v << " " << max_v << std::endl;
 	}
 
 	void set_smooth_cost(const gco_ptr_t &gco, int n_labels, int penalty)

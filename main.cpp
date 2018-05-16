@@ -35,6 +35,14 @@ struct Params
 	std::string video_file = "";
 	BlockArray::Capture capture = BlockArray::Capture(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP, BlockArray::CaptureType::CROSS);
 	BlockArray::Line slit = BlockArray::Line(NA_VALUE, NA_VALUE, NA_VALUE, BlockArray::Line::UP);
+
+	int search_radius = 1;
+	double block_foreground_threshold = 0.5;
+
+	double edge_threshold = 0.5;
+	double edge_brightness_threshold = 0.1;
+	double interval_threshold = 0.5;
+	int min_edge_hamming_dist = 4;
 };
 
 void save_vehicle(const Mat &img, const Rect &b_box, const std::string &path, size_t img_id);
@@ -161,7 +169,9 @@ Tracker get_tracker(const Params &p, const Mat &background)
 
 	BlockArray::Slit slit(p.slit, p.block_width, p.block_height);
 
-	return Tracker(p.foreground_threshold, p.background_update_weight, p.reverse_history_size, 1, 0.5, 0.5, 0.1, 0.5, 4, background, slit, p.capture, blocks);
+	return Tracker(p.foreground_threshold, p.background_update_weight, p.reverse_history_size,
+	               p.search_radius, p.block_foreground_threshold, p.edge_threshold, p.edge_brightness_threshold,
+	               p.interval_threshold, p.min_edge_hamming_dist, background, slit, p.capture, blocks);
 }
 
 int main(int argc, char **argv) // TODO: stop interlayer before slit
