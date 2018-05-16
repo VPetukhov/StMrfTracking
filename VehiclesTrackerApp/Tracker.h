@@ -38,6 +38,7 @@ namespace Tracking
 		const double block_foreground_threshold;
 
 		// Interlayer feedback
+		const bool do_interlayer_feedback;
 		const double edge_threshold;
 		const double edge_brightness_threshold;
 		const double interval_threshold;
@@ -49,15 +50,16 @@ namespace Tracking
 
 	public:
 		Tracker(double foreground_threshold, double background_update_weight, int reverse_history_size, int search_radius,
-		        double block_foreground_threshold,
+		        double block_foreground_threshold, bool do_interlayer_feedback,
 		        double edge_threshold, double edge_brightness_threshold, double interval_threshold, int min_edge_hamming_dist,
 		        const cv::Mat &background, const BlockArray::Slit &slit,
 		        const BlockArray::Capture &capture, const BlockArray &blocks);
 		void add_frame(const cv::Mat &frame);
 
-		id_set_t register_vehicle_step(const cv::Mat &frame, const cv::Mat &prev_frame, const cv::Mat &background);
+		id_set_t register_vehicle_step(const cv::Mat &frame, const cv::Mat &prev_frame, const cv::Mat &background, bool do_il_feedback=true, bool return_ids=true);
 		id_set_t reverse_st_mrf_step();
 
+		const cv::Mat& background() const;
 		const BlockArray& blocks() const;
 		BlockArray& blocks();
 

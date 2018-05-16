@@ -1,7 +1,7 @@
 #pragma once
 
 #include <memory>
-#include "GCoptimization.h"
+#include "../GCO/GCoptimization.h"
 #include "opencv2/opencv.hpp"
 
 namespace Tracking

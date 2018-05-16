@@ -57,6 +57,7 @@ namespace Tracking
 	Point find_motion_vector(const BlockArray &blocks, const Mat &frame, const Mat &old_frame,
 	                         const coordinates_t &group_coords, int search_rad)
 	{
+		search_rad = 2;
 		Mat similarity_map = Mat::zeros(blocks.block_height * search_rad * 2 + 1, blocks.block_width * search_rad * 2 + 1, DataType<double>::type);
 		for (auto const&  coords: group_coords)
 		{

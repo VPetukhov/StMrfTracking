@@ -32,7 +32,7 @@ namespace Tracking
 	                    double min_s = 0.05, double min_h = 0.45);
 
 	rect_map_t bounding_boxes(const BlockArray &blocks);
-	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Capture &capture);
+	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Capture &capture, int offset);
 	id_set_t active_vehicle_ids(const rect_map_t &b_boxes, const BlockArray::Capture &capture);
 }
 

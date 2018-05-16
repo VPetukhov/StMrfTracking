@@ -2,6 +2,7 @@
 #include "Tracking.h"
 #include "NightDetection.h"
 #include "StMrf.h"
+#include "Utils.h"
 
 using namespace cv;
 
@@ -9,7 +10,7 @@ namespace Tracking
 {
 
 	Tracker::Tracker(double foreground_threshold, double background_update_weight, int reverse_history_size,
-	                 int search_radius, double block_foreground_threshold,
+	                 int search_radius, double block_foreground_threshold, bool do_interlayer_feedback,
 	                 double edge_threshold, double edge_brightness_threshold, double interval_threshold, int min_edge_hamming_dist,
 	                 const Mat &background, const BlockArray::Slit &slit,
 	                 const BlockArray::Capture &capture, const BlockArray &blocks)
@@ -20,6 +21,7 @@ namespace Tracking
 		, reverse_history_size(reverse_history_size)
 		, search_radius(search_radius)
 		, block_foreground_threshold(block_foreground_threshold)
+		, do_interlayer_feedback(do_interlayer_feedback)
 		, edge_threshold(edge_threshold)
 		, edge_brightness_threshold(edge_brightness_threshold)
 		, interval_threshold(interval_threshold)
@@ -42,6 +44,11 @@ namespace Tracking
 		}
 	}
 
+	const cv::Mat& Tracker::background() const
+	{
+		return this->_background;
+	}
+
 	const BlockArray &Tracker::blocks() const
 	{
 		return this->_blocks;
@@ -52,13 +59,16 @@ namespace Tracking
 		return this->_blocks;
 	}
 
-	id_set_t Tracker::register_vehicle_step(const cv::Mat &frame, const cv::Mat &prev_frame, const cv::Mat &background)
+	id_set_t Tracker::register_vehicle_step(const cv::Mat &frame, const cv::Mat &prev_frame, const cv::Mat &background, bool do_il_feedback, bool return_ids)
 	{
 		auto labels = connected_components(this->_blocks.object_map());
 		this->_blocks.set_object_ids(labels);
 
-		auto b_boxes_prev = bounding_boxes(this->_blocks);
-		auto vehicle_ids = active_vehicle_ids(b_boxes_prev, this->capture);
+		rect_map_t b_boxes_prev;
+		if (return_ids)
+		{
+			b_boxes_prev = bounding_boxes(this->_blocks);
+		}
 
 		Mat foreground;
 		foreground = subtract_background(frame, background, foreground_threshold);
@@ -72,9 +82,18 @@ namespace Tracking
 		}
 
 		auto next_label_id = this->segmentation_step(frame, prev_frame, foreground);
-		this->interlayer_feedback(frame, next_label_id);
+
+		if (this->do_interlayer_feedback && do_il_feedback)
+		{
+			this->interlayer_feedback(frame, next_label_id);
+		}
+
+		if (!return_ids)
+			return id_set_t();
+
 		auto b_boxes = bounding_boxes(this->_blocks);
-		return register_vehicle(b_boxes, vehicle_ids, this->capture);
+		auto vehicle_ids = active_vehicle_ids(b_boxes_prev, this->capture);
+		return register_vehicle(b_boxes, vehicle_ids, this->capture, 2);
 	}
 
 	id_set_t Tracker::reverse_st_mrf_step()
@@ -85,12 +104,13 @@ namespace Tracking
 		id_set_t ids;
 		for (long i = this->_frames.size() - 2; i >= 0; --i)
 		{
-			ids = this->register_vehicle_step(this->_frames[i], this->_frames[i + 1], this->_backgrounds[i]);
+			this->register_vehicle_step(this->_frames[i], this->_frames[i + 1], this->_backgrounds[i], false, false);
 		}
 
 		for (size_t i = 1; i < this->_frames.size(); ++i)
 		{
-			ids = this->register_vehicle_step(this->_frames[i], this->_frames[i - 1], this->_backgrounds[i]);
+			bool last_frame = i == (this->_frames.size() - 1);
+			ids = this->register_vehicle_step(this->_frames[i], this->_frames[i - 1], this->_backgrounds[i], last_frame, last_frame);
 		}
 
 		return ids;
@@ -196,7 +216,7 @@ namespace Tracking
 		std::vector<Point> motion_vectors;
 		for (auto const &coords : group_coords)
 		{
-			auto mv = find_motion_vector(this->_blocks, frame, old_frame, coords, this->search_radius);
+			auto mv = find_motion_vector(this->_blocks, frame, old_frame, coords, 2);
 			motion_vectors.push_back(mv);
 		}
 
@@ -328,6 +348,10 @@ namespace Tracking
 			this->_blocks.at(slit.block_y(), slit.block_xs()[slit_block_id]).object_id = object_ids.at(slit_block_id);
 		}
 
-		return *std::max(object_ids.begin(), object_ids.end()) + 1;
+		auto max_it = std::max(object_ids.begin(), object_ids.end());
+		if (max_it == object_ids.end())
+			return 0;
+
+		return (*max_it) + 1;
 	}
 }

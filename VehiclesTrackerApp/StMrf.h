@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <unordered_set>
-#include <bits/unordered_set.h>
 
 #include "opencv2/opencv.hpp"
 

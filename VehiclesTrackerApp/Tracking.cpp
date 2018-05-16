@@ -59,7 +59,7 @@ namespace Tracking
 	void refine_background(Mat &background, const std::vector<Mat> &frames, double weight, size_t max_iters)
 	{
 		int iter = 0;
-		for (float threshold : std::vector<float>({0.2, 0.1, 0.05}))
+		for (double threshold : std::vector<double>({0.2, 0.1, 0.05}))
 		{
 			if (++iter > max_iters)
 				break;
@@ -160,35 +160,7 @@ namespace Tracking
 		return res;
 	}
 
-	rect_map_t bounding_boxes(const BlockArray &blocks)
-	{
-		rect_map_t bounding_boxes;
-		for (size_t row = 0; row < blocks.height; ++row)
-		{
-			for (size_t col = 0; col < blocks.width; ++col)
-			{
-				auto const &block = blocks.at(row, col);
-				if (block.object_id == 0)
-					continue;
-
-				auto bb_it = bounding_boxes.find(block.object_id);
-				if (bb_it == bounding_boxes.end())
-				{
-					bb_it = bounding_boxes.emplace(block.object_id, Rect(block.start_x, block.start_y, 0, 0)).first;
-				}
-
-				auto const &bb = bb_it->second;
-				bb_it->second.y = std::min(bb.y, static_cast<int>(block.start_y));
-				bb_it->second.x = std::min(bb.x, static_cast<int>(block.start_x));
-				bb_it->second.height = std::max(bb.height, static_cast<int>(block.end_y - bb.y));
-				bb_it->second.width = std::max(bb.width, static_cast<int>(block.end_x - bb.x));
-			}
-		}
-
-		return bounding_boxes;
-	}
-
-	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Capture &capture)
+	id_set_t register_vehicle(const rect_map_t &b_boxes, const id_set_t &vehicle_ids, const BlockArray::Capture &capture, int offset)
 	{
 		id_set_t res;
 		for (auto const &rect_it : b_boxes)
@@ -203,13 +175,13 @@ namespace Tracking
 			if (capture.direction == BlockArray::Line::UP)
 			{
 				int border_y = (capture.type == BlockArray::CROSS) ? (b_box.y + b_box.height) : b_box.y;
-				if (border_y > capture.y)
+				if (border_y > capture.y - offset)
 					continue;
 			}
 			else
 			{
 				int border_y = (capture.type == BlockArray::CROSS) ? b_box.y : (b_box.y + b_box.height);
-				if (border_y < capture.y)
+				if (border_y < capture.y + offset)
 					continue;
 			}
 
